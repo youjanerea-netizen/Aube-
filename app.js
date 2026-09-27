@@ -177,7 +177,53 @@ function maraNowReply(n,cur){
  const planned=items.length;
  return planned?`Il n’y a plus d’activité à venir dans ton planning aujourd’hui. Tu peux souffler${N()} 💙`:`Tu n’as rien de prévu aujourd’hui dans ton planning.`;
 }
+/* Couche de compréhension planning élargie : priorité aux questions pratiques,
+   puis au moteur émotionnel existant. Aucun accès réseau. */
+function maraSmartAnswer(raw){
+ const text=norm(raw), now=new Date(), dayNow=now.getDay(), minuteNow=now.getHours()*60+now.getMinutes();
+ const word=(...xs)=>xs.some(x=>new RegExp('(^| )'+x+'( |$)').test(text));
+ const fuzzy=(target)=>{
+  const toks=text.split(' '); const max=target.length>=7?2:1;
+  for(const tok of toks){if(Math.abs(tok.length-target.length)>max)continue;let prev=Array.from({length:target.length+1},(_,i)=>i);
+   for(let i=1;i<=tok.length;i++){const cur=[i];for(let j=1;j<=target.length;j++)cur[j]=Math.min(cur[j-1]+1,prev[j]+1,prev[j-1]+(tok[i-1]===target[j-1]?0:1));prev=cur;}if(prev[target.length]<=max)return true;
+  }return false;
+ };
+ const any=(...xs)=>word(...xs)||xs.some(x=>x.length>4&&fuzzy(x));
+ let day=null;
+ if(any('demain','lendemain'))day=(dayNow+1)%7;
+ else if(any('apres demain','apresdemain'))day=(dayNow+2)%7;
+ else if(any('aujourd hui','aujourdhui','maintenant','actuellement'))day=dayNow;
+ else for(let i=0;i<7;i++){const d=norm(DL[i]);if(word(d)||fuzzy(d)){day=i;break;}}
+ const memory=S.mara&&Array.isArray(S.mara.memory)?S.mara.memory:[];
+ if(any('que sais tu de moi','qu est ce que tu sais sur moi','qu est ce que tu retiens','tu te souviens de quoi','mes souvenirs','ma memoire'))return memory.length?`Voici ce que j’ai retenu :\n${memory.slice(-12).map(x=>'• '+x.fact).join('\n')}`:'Je n’ai pas encore de souvenir enregistré. Tu peux me dire « retiens que… » pour en ajouter un.';
+ const asksTime=any('quelle heure','heure actuelle','heure exacte','il est quelle heure','heure est il','on est a quelle heure','combien heure');
+ if(asksTime)return `Il est ${now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}, ${now.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}.`;
+ const asksNow=any('maintenant','la tout de suite','en ce moment','je fais quoi','on fait quoi','quoi faire','qu est ce qu on fait','qu est ce que je fais','prochaine activite','apres','la je fais quoi','je dois faire quoi','quoi de prevu la');
+ const asksToday=any('aujourd hui','aujourdhui','ma journee','journee aujourd hui','ce jour')&&any('quoi','faire','fait','prevu','programme','activite','planning','agenda','tache');
+ const asksFull=any('programme complet','tout le programme','toute la journee','tous les horaires','liste des activites','emploi du temps','agenda complet','toutes les activites','donne moi tout','recap complet');
+ const asksSchedule=asksFull||asksToday||asksNow||any('planning','programme','agenda','emploi du temps','activites prevues','taches prevues','qu est ce que j ai')||(day!==null&&any('quoi','faire','prevu','activite','tache')); 
+ if(!asksSchedule)return '';
+ const d=day==null?dayNow:day, isToday=d===dayNow;
+ const items=S.habits.filter(h=>(h.days||[]).includes(d)).map(h=>({h,start:mins(htime(h,d)),end:mins(htime(h,d))+Number(h.dur||0),done:isDone(h,key(isToday?now:new Date(now.getFullYear(),now.getMonth(),now.getDate()+((d-dayNow+7)%7))))})).sort((a,b)=>a.start-b.start);
+ const label=isToday?'aujourd’hui':d===((dayNow+1)%7)?'demain':DL[d].toLowerCase();
+ if(asksNow&&isToday&&!asksFull&&!asksToday)return maraNowReply(now,minuteNow);
+ if(asksNow&&!isToday&&!asksFull)return `Voici ce qui est prévu ${label} :\n`+items.map(x=>`• ${hm2(x.start)}–${hm2(x.end)} · ${x.h.name}`).join('\n');
+ if(!items.length)return `Tu n’as aucune activité enregistrée pour ${label}. Si tu pensais à un autre jour ou à une habitude non ajoutée, dis-moi laquelle.`;
+ if(asksToday&&!asksFull){
+  const active=items.find(x=>!x.done&&minuteNow>=x.start&&minuteNow<x.end);
+  const next=items.find(x=>!x.done&&x.start>minuteNow);
+  const remain=items.filter(x=>!x.done&&(x.end>minuteNow));
+  let intro=active?`Là, tu es dans « ${active.h.name} » jusqu’à ${hm2(active.end)}.`:next?`Là, tu es libre jusqu’à ${hm2(next.start)}. Ensuite, tu as « ${next.h.name} » à ${hm2(next.start)}.`:'Pour aujourd’hui, il n’y a plus d’activité à venir.';
+  const later=remain.length?` Il te reste ${remain.length} activité${remain.length>1?'s':''} : ${remain.map(x=>`${x.h.name} à ${hm2(x.start)}`).join(', ')}.`:' Toutes les activités prévues sont terminées.';
+  return `${intro}${later}\n\nTu veux le détail complet des horaires ? Demande-moi « tout mon programme ».`;
+ }
+ if(asksFull||any('programme','planning','agenda','emploi du temps','liste'))return `Voici ton programme ${label} :\n`+items.map(x=>`• ${hm2(x.start)}–${hm2(x.end)} · ${x.h.name}${x.done?' (terminé)':''}`).join('\n');
+ const next=items.find(x=>!x.done&&x.start>=minuteNow);
+ return next?`Ta prochaine activité ${isToday?'aujourd’hui':label} est « ${next.h.name} » à ${hm2(next.start)} (${next.h.dur} min).`:`Tu n’as plus d’activité à venir ${label}.`;
+}
+
 function answer(raw,soft){
+ const smart=maraSmartAnswer(raw);if(smart)return smart;
  const t=norm(raw),n=new Date(),cur=n.getHours()*60+n.getMinutes(),td=remaining();
  if(hasAny(t,CR))return CRM();
  const acted0=tryAct(raw);if(acted0)return acted0;

@@ -1,0 +1,18 @@
+PATCH MARA — AUBE (hors ligne)
+
+Contenu : app.js uniquement (moteur conversationnel et interface déjà présente dans ce fichier).
+
+Installation :
+1. Fais une copie de sauvegarde de ton ZIP Aube complet.
+2. Ouvre le ZIP complet et remplace son fichier app.js par celui-ci.
+3. Ne remplace aucun autre fichier. Redéploie ensuite le ZIP complet sur Netlify.
+
+Améliorations intégrées :
+- Questions de planning formulées plus naturellement, avec variantes et tolérance limitée aux fautes.
+- Distinction entre l'instant présent, le résumé de la journée et le programme complet.
+- Questions sur aujourd'hui/demain/jours de semaine et prochaine activité.
+- Réponse à l'heure locale exacte.
+- Rappel des faits mémorisés quand on demande ce que Mara a retenu.
+- La zone de saisie garde Entrée pour un retour à la ligne et Ctrl+Entrée (ou Cmd+Entrée) pour envoyer, comme prévu par le code existant.
+
+Limite honnête : moteur local à règles/lexique, pas un grand modèle génératif embarqué. Il fonctionne sans connexion mais ne comprend pas toutes les formulations possibles.

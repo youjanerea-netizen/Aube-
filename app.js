@@ -84,7 +84,11 @@ async function transcodeAlarm(file){const raw=await file.arrayBuffer();const tmp
    d’intentions, mémoire de la conversation en cours, et une bibliothèque de réponses
    variées pour éviter de répéter deux fois la même phrase. */
 const norm=s=>s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[’']/g,' ').replace(/[^\p{L}\p{N}\s]/gu,' ').replace(/\s+/g,' ').trim();
-const has=(t,...w)=>w.some(x=>new RegExp('\\b'+x).test(t));
+/* Tolérance aux fautes de frappe : si le mot-clé exact n’est pas trouvé tel quel,
+   on compare chaque mot du message au mot-clé avec une distance de Levenshtein,
+   pour attraper les fautes courantes et la frappe rapide sur mobile. */
+function lev(a,b){if(a===b)return 0;const m=a.length,n=b.length;if(!m)return n;if(!n)return m;let prev=Array.from({length:n+1},(_,j)=>j);for(let i=1;i<=m;i++){const cur=[i];for(let j=1;j<=n;j++)cur[j]=a[i-1]===b[j-1]?prev[j-1]:1+Math.min(prev[j-1],prev[j],cur[j-1]);prev=cur}return prev[n]}
+const has=(t,...w)=>w.some(x=>{if(new RegExp('\\b'+x).test(t))return true;if(!/\s/.test(x)&&x.length>=4){const tol=x.length>=8?2:1;return t.split(' ').some(tok=>tok.length>=3&&Math.abs(tok.length-x.length)<=tol&&lev(tok,x)<=tol)}return false});
 const hasAny=(t,arr)=>arr.some(x=>has(t,x));
 const pick=(a,skip)=>{if(a.length<2)return a[0];let i=Math.floor(Math.random()*a.length);if(skip!=null&&a.length>1)while(i===skip)i=Math.floor(Math.random()*a.length);return a[i]};
 const fname=()=>S.name.trim().split(' ')[0],N=()=>fname()?', '+fname():'';
@@ -103,21 +107,23 @@ const CRM=()=>`Merci de me le dire${N()}, et je suis vraiment là avec toi en ce
 /* Détection d’intention : mots-clés + petit contexte grammatical */
 function intent(t){
  if(hasAny(t,CR))return'crisis';
- if(has(t,'merci'))return'thanks';
- if(hasAny(t,['wesh','yo\\b','bien ou quoi','cv\\b','coucou','hello','hey','salut','bonjour','bonsoir','cc\\b']))return'greet';
- if(has(t,'ca va\\?','tu vas bien','comment tu vas','comment vas tu'))return'howru';
- if(hasAny(t,['pourquoi tu','comment tu marches','tu es qui','t es qui','tu es quoi','es tu une ia','es tu un robot','tu es reelle']))return'about';
- if(hasAny(t,['fatigu','epuis','creve','a bout','n en peux plus','vide','j ai plus la force','plus la force','dead\\b','crevee']))return'tired';
- if(hasAny(t,['stress','angoiss','anxi','panique','pression','submerg','deborde','trop de choses','trop a faire','oppress','la pression']))return'stress';
- if(hasAny(t,['triste','deprim','pleur','cafard','decu','deprime','mal dans ma peau','moral a zero','moral dans les chaussettes','ca ne va pas','nul en ce moment','au fond','down\\b','ca va pas','ca va mal']))return'sad';
- if(hasAny(t,['seul(e)?\\b','solitude','personne ne','abandonne','isole']))return'lonely';
- if(hasAny(t,['enerv','colere','frustr','agac','saoule','marre','ras le bol','exaspere','relou','saoul','soule']))return'angry';
- if(hasAny(t,['peur','angoisse de','terrifi','inquiet','inquiete','anxieuse a l idee']))return'fear';
- if(hasAny(t,['procrast','motivation','flemme','pas envie','repousse','pas le courage','demotiv','decroche','j ai la flemme','nai pas la force']))return'demot';
- if(hasAny(t,['honte','culpab','echec','rate','en retard sur','j ai pas fait','pas tenu','deception envers moi']))return'shame';
- if(hasAny(t,['content','fier','fiere','heureu','genial','au top','motive','ca va bien','super','excellente journee','ouf\\b','grave bien','trop bien']))return'good';
- if(hasAny(t,['amour','amoureuse','amoureux','rupture','crush','couple','dispute avec']))return'relation';
+ if(has(t,'merci','remercie'))return'thanks';
+ if(hasAny(t,['wesh','yo\\b','bien ou quoi','cv\\b','coucou','hello','hey','salut','bonjour','bonsoir','cc\\b','bjr\\b','slt\\b']))return'greet';
+ if(has(t,'ca va\\?','tu vas bien','comment tu vas','comment vas tu','comment tu te sens'))return'howru';
+ if(hasAny(t,['pourquoi tu','comment tu marches','tu es qui','t es qui','tu es quoi','es tu une ia','es tu un robot','tu es reelle','tu es humaine','tu es vivante']))return'about';
+ if(hasAny(t,['fatigu','epuis','creve','a bout','n en peux plus','vide','j ai plus la force','plus la force','dead\\b','crevee','naze','k o\\b','ko\\b','sur les rotules','plus d energie','exte nue','exte nuee']))return'tired';
+ if(hasAny(t,['stress','angoiss','anxi','panique','pression','submerg','deborde','trop de choses','trop a faire','oppress','la pression','ca part dans tous les sens']))return'stress';
+ if(hasAny(t,['triste','deprim','pleur','cafard','decu','deprime','mal dans ma peau','moral a zero','moral dans les chaussettes','ca ne va pas','nul en ce moment','au fond','down\\b','ca va pas','ca va mal','envie de rien','j ai le seum','seum\\b']))return'sad';
+ if(hasAny(t,['seul(e)?\\b','solitude','personne ne','abandonne','isole','personne pour']))return'lonely';
+ if(hasAny(t,['enerv','colere','frustr','agac','saoule','marre','ras le bol','exaspere','relou','saoul','soule','vener','vnr\\b']))return'angry';
+ if(hasAny(t,['peur','angoisse de','terrifi','inquiet','inquiete','anxieuse a l idee','flippe','flip\\b']))return'fear';
+ if(hasAny(t,['procrast','motivation','flemme','pas envie','repousse','pas le courage','demotiv','decroche','j ai la flemme','nai pas la force','zero motivation','plus envie']))return'demot';
+ if(hasAny(t,['honte','culpab','echec','rate','en retard sur','j ai pas fait','pas tenu','deception envers moi','je me deteste']))return'shame';
+ if(hasAny(t,['content','fier','fiere','heureu','genial','au top','motive','ca va bien','super','excellente journee','ouf\\b','grave bien','trop bien','nickel','au taquet']))return'good';
+ if(hasAny(t,['amour','amoureuse','amoureux','rupture','crush','couple','dispute avec','mon ex']))return'relation';
  if(hasAny(t,['examen','controle','partiel','oral','entretien','competition','concours']))return'exam';
+ if(hasAny(t,['ennui','ennuie','m ennuie','rien a faire','je m emmerde','emmerde\\b']))return'bored';
+ if(hasAny(t,['malade','fievre','mal a la tete','mal au ventre','grippe','rhume','je tousse','mal partout']))return'sick';
  return'';
 }
 
@@ -138,6 +144,8 @@ shame:[()=>`Doucement avec toi-même${N()}. Rater quelque chose ne fait pas de t
 good:[()=>{const s=streak();return`Ça fait plaisir à lire${N()} 💙 ${s>1?`${s} jours de suite, tu tiens vraiment quelque chose.`:'Savoure ce moment.'} Qu’est-ce qui a rendu cette journée meilleure ?`}],
 relation:[()=>`Les relations, ça peut être compliqué. Raconte-moi ce qui se passe, je peux t’aider à démêler les faits, ce que tu ressens, et ce que tu imagines peut-être en plus.`],
 exam:[()=>`C’est normal d’avoir un peu (ou beaucoup) le trac avant ça. Tu as travaillé pour ce moment. Concentre-toi sur une révision légère et du repos plutôt que du bourrage la veille.${light()}`],
+bored:[()=>`L’ennui, ça arrive${N()}. Tu veux qu’on regarde ce qu’il y a de prévu bientôt, ou tu préfères souffler un peu avant de t’y remettre ?`,()=>`Petit creux dans la journée ? Dis-le-moi si tu veux une idée, ou demande-moi directement tes créneaux libres.`],
+sick:[()=>`Ça n’a pas l’air d’aller physiquement${N()}. Écoute ton corps avant ton planning : repose-toi, hydrate-toi, et si tu veux, je peux t’aider à alléger ta journée pour aujourd’hui.`],
 general:[()=>`Je t’écoute${N()}. Pose-le comme ça vient.`,()=>`Ok. Dis-m’en un peu plus, j’essaie de te suivre précisément.`,()=>`Je suis là. Qu’est-ce qui t’aiderait, là, tout de suite ?`,()=>`Continue, je ne lâche pas le fil.`]};
 
 const TIPS=['Règle des 2 minutes : lance-toi pour 2 minutes seulement. Démarrer est la vraie difficulté.','Empile tes habitudes : accroche la nouvelle à une existante (« après mon café, je révise »).','Rends-la évidente : prépare tout la veille (tenue, livre, sac). Moins de friction, plus de constance.','Commence petit : 5 minutes chaque jour battent 1 heure une fois par semaine.','Ne rate jamais deux fois de suite : un oubli arrive, c’est la reprise le lendemain qui compte vraiment.','Fête chaque petite victoire : c’est ce qui ancre une habitude dans la durée.','Attache un rituel à un lieu ou une heure fixe : le cerveau adore les repères stables.'];
@@ -177,67 +185,45 @@ function maraNowReply(n,cur){
  const planned=items.length;
  return planned?`Il n’y a plus d’activité à venir dans ton planning aujourd’hui. Tu peux souffler${N()} 💙`:`Tu n’as rien de prévu aujourd’hui dans ton planning.`;
 }
-/* Couche de compréhension planning élargie : priorité aux questions pratiques,
-   puis au moteur émotionnel existant. Aucun accès réseau. */
-function maraSmartAnswer(raw){
- const text=norm(raw), now=new Date(), dayNow=now.getDay(), minuteNow=now.getHours()*60+now.getMinutes();
- const word=(...xs)=>xs.some(x=>new RegExp('(^| )'+x+'( |$)').test(text));
- const fuzzy=(target)=>{
-  const toks=text.split(' '); const max=target.length>=7?2:1;
-  for(const tok of toks){if(Math.abs(tok.length-target.length)>max)continue;let prev=Array.from({length:target.length+1},(_,i)=>i);
-   for(let i=1;i<=tok.length;i++){const cur=[i];for(let j=1;j<=target.length;j++)cur[j]=Math.min(cur[j-1]+1,prev[j]+1,prev[j-1]+(tok[i-1]===target[j-1]?0:1));prev=cur;}if(prev[target.length]<=max)return true;
-  }return false;
- };
- const any=(...xs)=>word(...xs)||xs.some(x=>x.length>4&&fuzzy(x));
- let day=null;
- if(any('demain','lendemain'))day=(dayNow+1)%7;
- else if(any('apres demain','apresdemain'))day=(dayNow+2)%7;
- else if(any('aujourd hui','aujourdhui','maintenant','actuellement'))day=dayNow;
- else for(let i=0;i<7;i++){const d=norm(DL[i]);if(word(d)||fuzzy(d)){day=i;break;}}
- const memory=S.mara&&Array.isArray(S.mara.memory)?S.mara.memory:[];
- if(any('que sais tu de moi','qu est ce que tu sais sur moi','qu est ce que tu retiens','tu te souviens de quoi','mes souvenirs','ma memoire'))return memory.length?`Voici ce que j’ai retenu :\n${memory.slice(-12).map(x=>'• '+x.fact).join('\n')}`:'Je n’ai pas encore de souvenir enregistré. Tu peux me dire « retiens que… » pour en ajouter un.';
- const asksTime=any('quelle heure','heure actuelle','heure exacte','il est quelle heure','heure est il','on est a quelle heure','combien heure');
- if(asksTime)return `Il est ${now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}, ${now.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}.`;
- const asksNow=any('maintenant','la tout de suite','en ce moment','je fais quoi','on fait quoi','quoi faire','qu est ce qu on fait','qu est ce que je fais','prochaine activite','apres','la je fais quoi','je dois faire quoi','quoi de prevu la');
- const asksToday=any('aujourd hui','aujourdhui','ma journee','journee aujourd hui','ce jour')&&any('quoi','faire','fait','prevu','programme','activite','planning','agenda','tache');
- const asksFull=any('programme complet','tout le programme','toute la journee','tous les horaires','liste des activites','emploi du temps','agenda complet','toutes les activites','donne moi tout','recap complet');
- const asksSchedule=asksFull||asksToday||asksNow||any('planning','programme','agenda','emploi du temps','activites prevues','taches prevues','qu est ce que j ai')||(day!==null&&any('quoi','faire','prevu','activite','tache')); 
- if(!asksSchedule)return '';
- const d=day==null?dayNow:day, isToday=d===dayNow;
- const items=S.habits.filter(h=>(h.days||[]).includes(d)).map(h=>({h,start:mins(htime(h,d)),end:mins(htime(h,d))+Number(h.dur||0),done:isDone(h,key(isToday?now:new Date(now.getFullYear(),now.getMonth(),now.getDate()+((d-dayNow+7)%7))))})).sort((a,b)=>a.start-b.start);
- const label=isToday?'aujourd’hui':d===((dayNow+1)%7)?'demain':DL[d].toLowerCase();
- if(asksNow&&isToday&&!asksFull&&!asksToday)return maraNowReply(now,minuteNow);
- if(asksNow&&!isToday&&!asksFull)return `Voici ce qui est prévu ${label} :\n`+items.map(x=>`• ${hm2(x.start)}–${hm2(x.end)} · ${x.h.name}`).join('\n');
- if(!items.length)return `Tu n’as aucune activité enregistrée pour ${label}. Si tu pensais à un autre jour ou à une habitude non ajoutée, dis-moi laquelle.`;
- if(asksToday&&!asksFull){
-  const active=items.find(x=>!x.done&&minuteNow>=x.start&&minuteNow<x.end);
-  const next=items.find(x=>!x.done&&x.start>minuteNow);
-  const remain=items.filter(x=>!x.done&&(x.end>minuteNow));
-  let intro=active?`Là, tu es dans « ${active.h.name} » jusqu’à ${hm2(active.end)}.`:next?`Là, tu es libre jusqu’à ${hm2(next.start)}. Ensuite, tu as « ${next.h.name} » à ${hm2(next.start)}.`:'Pour aujourd’hui, il n’y a plus d’activité à venir.';
-  const later=remain.length?` Il te reste ${remain.length} activité${remain.length>1?'s':''} : ${remain.map(x=>`${x.h.name} à ${hm2(x.start)}`).join(', ')}.`:' Toutes les activités prévues sont terminées.';
-  return `${intro}${later}\n\nTu veux le détail complet des horaires ? Demande-moi « tout mon programme ».`;
- }
- if(asksFull||any('programme','planning','agenda','emploi du temps','liste'))return `Voici ton programme ${label} :\n`+items.map(x=>`• ${hm2(x.start)}–${hm2(x.end)} · ${x.h.name}${x.done?' (terminé)':''}`).join('\n');
- const next=items.find(x=>!x.done&&x.start>=minuteNow);
- return next?`Ta prochaine activité ${isToday?'aujourd’hui':label} est « ${next.h.name} » à ${hm2(next.start)} (${next.h.dur} min).`:`Tu n’as plus d’activité à venir ${label}.`;
+/* Segments approximatifs de la journée, pour « qu'est-ce que j'ai ce matin / cet
+   après-midi / ce soir ? » */
+const DAYPARTS={matin:[300,720],apresmidi:[720,1080],soir:[1080,1440],nuit:[1320,1620]};
+function daypartOf(t){
+ if(has(t,'cet apres midi','l apres midi','dans l apres midi','en debut d apres midi'))return['après-midi',DAYPARTS.apresmidi];
+ if(has(t,'ce soir','en soiree','la soiree','dans la soiree','ce soire'))return['soir',DAYPARTS.soir];
+ if(has(t,'ce matin','dans la matinee','la matinee','en debut de matinee'))return['matin',DAYPARTS.matin];
+ if(has(t,'cette nuit','en pleine nuit'))return['nuit',DAYPARTS.nuit];
+ return null;
 }
-
 function answer(raw,soft){
- const smart=maraSmartAnswer(raw);if(smart)return smart;
  const t=norm(raw),n=new Date(),cur=n.getHours()*60+n.getMinutes(),td=remaining();
  if(hasAny(t,CR))return CRM();
  const acted0=tryAct(raw);if(acted0)return acted0;
  if(has(t,'respir','souffl'))return'Faisons-le ensemble, doucement :\n1. Inspire par le nez pendant 4 secondes\n2. Expire lentement par la bouche pendant 6 secondes\n3. Recommence 5 fois\n\nÀ chaque expiration, relâche un peu plus les épaules. Tu peux aussi lancer l’exercice animé dans le bilan du jour.';
- const early=intent(t);const wantsAct=has(t,'ajoute','creer','cree','decale','supprime','deplace','prevois','retiens','programme','horaire','enregistre','note que','rdv','rendez vous');
- if(early&&!wantsAct&&!has(t,'programme','planning','agenda','habitude','creneau','libre','prochain')){const acted=tryAct(raw);return acted||emoReply(raw)}
+ if(has(t,'qu est ce que tu sais','de quoi tu te souviens','tu te souviens de quoi','ce que tu retiens sur moi','qu est ce que tu retiens','tu sais quoi sur moi')){const mem=memStore();return mem.length?`Voici ce que j’ai retenu :\n`+mem.slice(-10).map(x=>`• ${x.fact}`).join('\n'):`Je n’ai encore rien de particulier en mémoire. Dis-moi « retiens que… » suivi de ce que tu veux que je garde en tête.`}
+
+ const early=intent(t);
+ const wantsAct=has(t,'ajoute','creer','cree','decale','supprime','deplace','prevois','retiens','programme','horaire','enregistre','note que','rdv','rendez vous','coche','decoche','marque');
+ const scheduleGuard=has(t,'programme','planning','agenda','habitude','creneau','libre','prochain','maintenant','apres','ensuite','aujourd','demain','stat','serie','bilan','taux','resultat','performance','combien','conseil','astuce','heure','matin','soir','nuit','journee','activite');
+ if(early&&!wantsAct&&!scheduleGuard){const acted=tryAct(raw);return acted||emoReply(raw)}
 
  let dy=null;if(has(t,'demain'))dy=(n.getDay()+1)%7;else if(has(t,'aujourd'))dy=n.getDay();else for(let i=0;i<7;i++)if(has(t,norm(DL[i])))dy=i;
 
- // Les formulations « je fais quoi là ? », « qu'est-ce qu'on fait aujourd'hui ? »
- // demandent l'état du moment, pas la récitation de tout l'agenda.
- const fullAgenda=has(t,'programme complet','tout le programme','toute la journee','tous les horaires','liste des activites','emploi du temps','agenda complet','toutes les activites');
- const asksNow=has(t,'maintenant','la tout de suite','en ce moment','la maintenant','je fais quoi','on fait quoi','quoi faire','qu est ce qu on fait','qu est ce que je fais','prochaine activite','apres');
- if(!fullAgenda && (asksNow || (has(t,'aujourd hui')&&has(t,'quoi','faire','prevu','activite')))){
+ // Segment de journée : matin / après-midi / soir / nuit
+ const dp=daypartOf(t);
+ if(dp){
+   const d=dy==null?n.getDay():dy,[lo,hi]=dp[1];
+   const items=S.habits.filter(h=>h.days.includes(d)).map(h=>({h,start:mins(htime(h,d)),end:hend(h,d)})).filter(x=>x.start<hi&&x.end>lo).sort((a,b)=>a.start-b.start);
+   const when=d===n.getDay()?"aujourd’hui":DL[d].toLowerCase();
+   return items.length?`Ce que tu as prévu ${when} (${dp[0]}) :\n`+items.map(x=>`• ${hm2(x.start)}–${hm2(x.end)} · ${x.h.name} (${x.h.dur} min)`).join('\n'):`Rien de prévu ${when} pour ${dp[0]==='soir'?'la soirée':'ce moment-là'}.`;
+ }
+
+ // « je fais quoi là ? », « qu'est-ce qu'on fait aujourd'hui ? » → l'état du moment,
+ // pas la récitation de tout l'agenda. Liste très large pour couvrir un maximum
+ // de façons de poser la question.
+ const fullAgenda=has(t,'programme complet','tout le programme','toute la journee','tous les horaires','liste des activites','emploi du temps','agenda complet','toutes les activites','du debut a la fin','de a a z');
+ const asksNow=has(t,'maintenant','la tout de suite','en ce moment','la maintenant','je fais quoi','on fait quoi','quoi faire','qu est ce qu on fait','qu est ce que je fais','qu est ce qu il y a','y a quoi','il y a quoi','c est quoi la suite','c est quoi apres','je suis sur quoi','je suis cense faire','je dois faire quoi','on est cense faire quoi','c est quand la prochaine','c est quoi mon activite','prochaine activite','qu est ce qui m attend','je fais quoi la','on fait quoi la','je fais quoi maintenant');
+ if(!fullAgenda && (asksNow || (dy!=null && has(t,'quoi','faire','prevu','activite') && !has(t,'programme','planning','agenda','liste','emploi du temps')))){
    return maraNowReply(n,cur);
  }
 
@@ -268,16 +254,42 @@ function answer(raw,soft){
    return `À ${hm2(askedMinute)} ${when}, tu n’as aucune activité prévue.${after?` La prochaine est « ${after.h.name} » à ${hm2(after.start)}.`:''}`;
  }
  if(has(t,'quelle heure','heure actuelle','heure exacte','il est quelle heure','on est a quelle heure'))return`Il est ${n.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}, ${n.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}.`;
-if(has(t,'prochain','ensuite','apres','maintenant','next','je fais quoi','quoi faire','a faire la')){const active=td.find(h=>mins(htime(h,n.getDay()))<=cur&&mins(htime(h,n.getDay()))+Number(h.dur||0)>cur);if(active)return`Là, tu es dans ton créneau « ${active.name} » (${htime(active,n.getDay())}–${hm2(mins(htime(active,n.getDay()))+Number(active.dur||0))}). Si tu l’as déjà terminé, tu peux passer à la suivante.`;const nx=td.find(h=>mins(htime(h,n.getDay()))>=cur)||td[0],nt=nx?htime(nx,n.getDay()):'';return nx?`Ta prochaine tâche : « ${nx.name} » à ${nt} (${nx.dur} min, jusqu’à ${hm2(mins(nt)+Number(nx.dur||0))}).${mins(nt)<cur?' Elle est un peu en retard, mais tu peux encore la faire !':''}`:'Tout est terminé pour aujourd’hui, bravo !'}
- if(has(t,'libre','dispo','creneau')){const d=dy==null?n.getDay():dy,g=gaps(d,d===n.getDay()?cur:0);return g.length?`Créneaux libres ${d===n.getDay()?'aujourd’hui':DL[d].toLowerCase()} :\n`+g.slice(0,4).map(x=>`• ${hm2(x[0])} – ${hm2(x[1])} (${dlab(x[1]-x[0])})`).join('\n'):'Pas de grand créneau libre ce jour-là (entre 7 h et 22 h).'}
- if(has(t,'serie','streak','stat','progress','m en sors','bilan','taux','resultat','performance')){const s=streak();let a=0,b=0;for(let i=0;i<7;i++){const d=addD(n,-i),x=sched(d);b+=x.length;a+=x.filter(h=>isDone(h,key(d))).length}const r=b?Math.round(a/b*100):0;return`Série en cours : ${s} jour${s>1?'s':''}.\nCes 7 derniers jours : ${r} % de tâches réalisées (${a}/${b}).\nAujourd’hui, il te reste ${td.length} tâche${td.length>1?'s':''}.${r>=80?' Excellent rythme, continue !':r>=50?' Belle régularité, tu peux encore grimper.':' Pas de panique : on repart petit à petit.'}`}
+
+ // « Combien de temps avant/depuis X ? » — avec repli sur l'activité en cours ou
+ // la prochaine si aucun nom n'est précisé, et une recherche de nom plus tolérante.
+ if(has(t,'combien de temps','il me reste combien','dans combien de temps','c est dans combien de temps')){
+   const m2=raw.match(/(?:avant|jusqu.?a|pour)\s+(.+)/i)||raw.match(/(?:dans combien de temps|combien de temps)\s+(.+)/i);
+   let name=m2?m2[1].replace(/[?!.]+$/,'').trim():'';
+   name=name.replace(/^(la |le |les |l.|mon |ma |mes |du |de la |des )/i,'').trim();
+   const d=n.getDay(),items=S.habits.filter(h=>h.days.includes(d)).map(h=>({h,start:mins(htime(h,d)),end:hend(h,d)}));
+   let target=null;
+   if(name){
+     const nq=norm(name);
+     target=items.find(x=>{const nh=norm(x.h.name);return nh.includes(nq)||nq.includes(nh)||nh.split(' ').some(w=>w.length>=4&&nq.split(' ').includes(w))});
+   }
+   if(!target)target=items.find(x=>x.start<=cur&&x.end>cur)||items.filter(x=>x.start>cur).sort((a,b)=>a.start-b.start)[0];
+   if(!target)return name?`Je ne trouve pas « ${name} » dans le programme d’aujourd’hui.`:`Il n’y a plus rien de prévu aujourd’hui.`;
+   if(target.start>cur)return `« ${target.h.name} » commence dans ${dlab(target.start-cur)} (à ${hm2(target.start)}).`;
+   if(target.end>cur)return `« ${target.h.name} » est en cours, il reste ${dlab(target.end-cur)}.`;
+   return `« ${target.h.name} » est déjà terminé(e) depuis ${dlab(cur-target.end)}.`;
+ }
+
+if(has(t,'prochain','ensuite','apres','maintenant','next','je fais quoi','quoi faire','a faire la','suivant','qui arrive','ce qui vient')){const active=td.find(h=>mins(htime(h,n.getDay()))<=cur&&mins(htime(h,n.getDay()))+Number(h.dur||0)>cur);if(active)return`Là, tu es dans ton créneau « ${active.name} » (${htime(active,n.getDay())}–${hm2(mins(htime(active,n.getDay()))+Number(active.dur||0))}). Si tu l’as déjà terminé, tu peux passer à la suivante.`;const nx=td.find(h=>mins(htime(h,n.getDay()))>=cur)||td[0],nt=nx?htime(nx,n.getDay()):'';return nx?`Ta prochaine tâche : « ${nx.name} » à ${nt} (${nx.dur} min, jusqu’à ${hm2(mins(nt)+Number(nx.dur||0))}).${mins(nt)<cur?' Elle est un peu en retard, mais tu peux encore la faire !':''}`:'Tout est terminé pour aujourd’hui, bravo !'}
+ if(has(t,'libre','dispo','creneau','du temps','un trou','de la place','creux','rien de prevu','me liberer','caser','glisser','temps mort')){const d=dy==null?n.getDay():dy,g=gaps(d,d===n.getDay()?cur:0);return g.length?`Créneaux libres ${d===n.getDay()?'aujourd’hui':DL[d].toLowerCase()} :\n`+g.slice(0,4).map(x=>`• ${hm2(x[0])} – ${hm2(x[1])} (${dlab(x[1]-x[0])})`).join('\n'):'Pas de grand créneau libre ce jour-là (entre 7 h et 22 h).'}
+ if(has(t,'serie','streak','stat','progress','m en sors','bilan','taux','resultat','performance','avancement','sur la bonne voie','ou j en suis','mes chiffres')){const s=streak();let a=0,b=0;for(let i=0;i<7;i++){const d=addD(n,-i),x=sched(d);b+=x.length;a+=x.filter(h=>isDone(h,key(d))).length}const r=b?Math.round(a/b*100):0;return`Série en cours : ${s} jour${s>1?'s':''}.\nCes 7 derniers jours : ${r} % de tâches réalisées (${a}/${b}).\nAujourd’hui, il te reste ${td.length} tâche${td.length>1?'s':''}.${r>=80?' Excellent rythme, continue !':r>=50?' Belle régularité, tu peux encore grimper.':' Pas de panique : on repart petit à petit.'}`}
  if(has(t,'combien'))return`Tu as ${S.habits.length} habitude${S.habits.length>1?'s':''}, dont ${sched(n).length} aujourd’hui.`;
- if(dy!=null||has(t,'programme','planning','a faire','journee','agenda')){const d=dy==null?n.getDay():dy,hs=S.habits.filter(h=>h.days.includes(d)).sort((a,b)=>htime(a,d).localeCompare(htime(b,d)));return hs.length?`Programme ${d===n.getDay()?'d’aujourd’hui':'de '+DL[d].toLowerCase()} :\n`+hs.map(h=>`• ${htime(h,d)}–${hm2(hend(h,d))} · ${h.name} (${h.dur} min)`).join('\n'):`Rien de prévu ${d===n.getDay()?'aujourd’hui':DL[d].toLowerCase()}.`}
+ if(dy!=null||has(t,'programme','planning','a faire','journee','agenda','emploi du temps','ma journee','mes taches','recapitule','resume','fais le point','a quoi ressemble','montre moi','affiche','deroule','au programme')){
+   const d=dy==null?n.getDay():dy,hs=S.habits.filter(h=>h.days.includes(d)).sort((a,b)=>htime(a,d).localeCompare(htime(b,d)));
+   if(!hs.length)return`Rien de prévu ${d===n.getDay()?'aujourd’hui':DL[d].toLowerCase()}.`;
+   const liste=hs.map(h=>`• ${htime(h,d)}–${hm2(hend(h,d))} · ${h.name} (${h.dur} min)`).join('\n');
+   if(d===n.getDay())return maraNowReply(n,cur)+`\n\nProgramme complet d’aujourd’hui :\n`+liste;
+   return`Programme de ${DL[d].toLowerCase()} :\n`+liste;
+ }
  if(has(t,'pomodoro','concentr','focus'))return'25 minutes de concentration, 5 minutes de pause, et une pause longue toutes les 4 séries. Coupe les notifications pendant le bloc.';
  if(has(t,'sommeil','dormir','coucher','reveil')&&!has(t,'fatigu'))return'Garde des horaires réguliers, coupe les écrans 30 minutes avant de dormir et garde la chambre fraîche et sombre. Ton heure de réveil compte plus que ton heure de coucher.';
  if(has(t,'alarme','sonnerie','notification')||/\bson\b/.test(t))return'Profil → Alarmes pour activer les rappels, puis « Sons d’alarme » pour choisir un son ou importer le tien.';
  if(has(t,'hors ligne','hors connexion','internet','installer'))return'Ouvre l’app une première fois en ligne, puis installe-la via le menu ⋮ de Chrome → « Installer l’application ». Ensuite, tout marche sans connexion, moi y compris.';
- if(has(t,'ajouter','creer','nouvelle habitude'))return'Onglet Habitudes, puis le bouton + en haut à droite.';
+ if(has(t,'ajouter','creer','nouvelle habitude'))return'Onglet Habitudes, puis le bouton + en haut à droite. Tu peux aussi juste me dire « ajoute [nom] à [heure] » ici, je m’en occupe directement.';
  if(has(t,'sauvegard','export','import'))return'Profil → Données : tu peux exporter ou importer une sauvegarde.';
  if(has(t,'conseil','astuce','constan','regularit','routine')&&!has(t,'comment tu')){const ctx=MCTX();let i=Math.floor(Math.random()*TIPS.length);if(TIPS.length>1)while(i===ctx.lastTip)i=Math.floor(Math.random()*TIPS.length);ctx.lastTip=i;save();return TIPS[i]}
  const it=intent(t);
@@ -294,9 +306,13 @@ function guessCat(name){const t=norm(name);if(has(t,'math','physique','chim','hi
 function guessIcon(cat){return {studies:'book',sport:'dumbbell',sleep:'moon',work:'briefcase',personal:'heart',meals:'utensils',free:'sun'}[cat]||'sun'}
 function applyMaraActions(actions){if(!Array.isArray(actions)||!actions.length)return [];const notes=[];for(const a of actions.slice(0,12)){try{if(a.type==='upsert_habit'){const time=parseHHMM(a.time)||'08:00',dur=Math.max(1,Math.min(600,Number(a.dur)||45));const days=Array.isArray(a.days)&&a.days.length?a.days.map(Number).filter(d=>d>=0&&d<=6):[...ALL];const cat=CAT[a.cat]?a.cat:guessCat(a.name||'');const exist=findHabit(a.id,a.name);const o=exist?exist:{id:'h'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:'',desc:'',cat,icon:guessIcon(cat),time,dur,days:[...days],dayTimes:{},alarm:true,snd:''};if(a.name)o.name=String(a.name).slice(0,60);if(a.desc!=null)o.desc=String(a.desc).slice(0,400);if(CAT[a.cat])o.cat=a.cat;if(a.icon&&P[a.icon])o.icon=a.icon;if(a.time)o.time=time;if(a.dur)o.dur=dur;if(Array.isArray(a.days)&&a.days.length)o.days=days;if(a.dayTimes&&typeof a.dayTimes==='object')o.dayTimes={...(o.dayTimes||{}),...a.dayTimes};if(typeof a.alarm==='boolean')o.alarm=a.alarm;if(!exist)S.habits.push(o);notes.push(`« ${o.name} » ${o.time} · ${o.dur} min`)}else if(a.type==='delete_habit'){const h=findHabit(a.id,a.name);if(h){S.habits=S.habits.filter(x=>x.id!==h.id);notes.push('supprimé : '+h.name)}}else if(a.type==='set_habit_time'){const h=findHabit(a.id,a.name);if(h){const time=parseHHMM(a.time);if(!time)continue;if(a.day!=null&&a.day>=0&&a.day<=6){h.dayTimes=h.dayTimes||{};h.dayTimes[a.day]=time}else h.time=time;if(a.dur)h.dur=Math.max(1,Math.min(600,Number(a.dur)));notes.push(h.name+' → '+time)}}else if(a.type==='mark_habit'){const h=findHabit(a.id,a.name);if(h){const k=key(new Date()),arr=S.done[k]||[];const on=!!a.done;S.done[k]=on?(arr.includes(h.id)?arr:[...arr,h.id]):arr.filter(x=>x!==h.id)}}else if(a.type==='remember_fact'&&a.fact){const mem=memStore();const fact=String(a.fact).slice(0,280);if(!mem.some(x=>x.fact===fact)){mem.push({t:Date.now(),cat:a.category||'vie',fact});if(mem.length>80)mem.shift()}notes.push('retenu')}else if(a.type==='forget_fact'&&a.fact){const q=norm(String(a.fact));S.mara.memory=(S.mara.memory||[]).filter(x=>!norm(x.fact).includes(q))}}catch(e){}}save();scheduleAlarms();return notes}
 function tryAct(raw){const t=norm(raw);if(!t)return '';const time=parseHHMM(raw);let days=[...ALL];if(has(t,'semaine')&&!has(t,'week end','weekend'))days=[...WK];if(has(t,'week end','weekend'))days=[0,6];if(has(t,'demain')){const d=(new Date().getDay()+1)%7;days=[d]}else {for(let i=0;i<7;i++)if(has(t,norm(DL[i])))days=[i]}
+ const undoneM=t.match(/^(?:j ai pas|je n ai pas)\s+(?:fait|termine|fini)\s+(.+)/)||t.match(/^decoche\s+(.+)/);
+ if(undoneM){const name=undoneM[1].replace(/\s+(a|à|pour)\s+(demain|aujourd hui|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|\d{1,2}).*/,'').replace(/\s+de\s+(demain|aujourd hui|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\b.*/,'').trim();const h=findHabit('',name);if(h){applyMaraActions([{type:'mark_habit',id:h.id,name:h.name,done:false}]);return `D’accord, « ${h.name} » n’est plus marqué comme fait.`}}
+ const doneM=t.match(/^j ai\s+(?:fait|termine|fini)\s+(.+)/)||t.match(/^(?:marque|coche)\s+(.+?)(?:\s+comme (?:fait|termine))?$/)||t.match(/^(.+?)\s+(?:c est fait|c est termine|c est bon)$/);
+ if(doneM){const name=doneM[1].replace(/\s+(a|à|pour)\s+(demain|aujourd hui|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|\d{1,2}).*/,'').replace(/\s+de\s+(demain|aujourd hui|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\b.*/,'').trim();const h=findHabit('',name);if(h){applyMaraActions([{type:'mark_habit',id:h.id,name:h.name,done:true}]);return `Coché comme fait${N()} : « ${h.name} ». Bravo !`}}
  const mem=raw.match(/^(?:retiens|souviens[- ]toi|n['’]oublie pas(?: que)?|note que)\s+(.+)/i);if(mem){applyMaraActions([{type:'remember_fact',fact:mem[1].trim(),category:'vie'}]);return `C’est noté${N()}. Je m’en souviendrai : « ${mem[1].trim()} ».`}
- const del=t.match(/^(?:supprime|enleve|retire|efface)\s+(?:l habitde |l habitude |le |la |les )?(?:creneau |tache |habitude )?(.+)/);if(del&&!has(t,'souvenir','memoire')){const name=del[1].replace(/\s+(a|à|de|pour|demain|aujourd hui).*/,'').trim();const h=findHabit('',name);if(h){applyMaraActions([{type:'delete_habit',id:h.id,name:h.name}]);return `C’est retiré du planning : « ${h.name} ».`} }
- const move=raw.match(/(?:decale|deplace|passe|mets)\s+(.+?)\s+(?:a|à|vers)\s+(\d{1,2}\s*[:hH]?\s*\d{0,2})/i);if(move){const h=findHabit('',move[1]);if(h){const tm=parseHHMM(move[2]);applyMaraActions([{type:'set_habit_time',id:h.id,name:h.name,time:tm,day:days.length===1?days[0]:undefined}]);return `C’est déplacé : « ${h.name} » à ${tm}.`}}
+ const del=t.match(/^(?:supprime|enleve|retire|efface)\s+(?:l habitde |l habitude |le |la |les )?(?:creneau |tache |habitude )?(.+)/);if(del&&!has(t,'souvenir','memoire')){const name=del[1].replace(/\s+(a|à|pour)\s+(demain|aujourd hui|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|\d{1,2}).*/,'').replace(/\s+de\s+(demain|aujourd hui|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\b.*/,'').trim();const h=findHabit('',name);if(h){applyMaraActions([{type:'delete_habit',id:h.id,name:h.name}]);return `C’est retiré du planning : « ${h.name} ».`} }
+ const move=t.match(/(?:decale|deplace|passe|mets)\s+(.+?)\s+(?:a|vers)\s+(\d{1,2}\s*[:hH]?\s*\d{0,2})/i);if(move){const h=findHabit('',move[1]);if(h){const tm=parseHHMM(move[2]);applyMaraActions([{type:'set_habit_time',id:h.id,name:h.name,time:tm,day:days.length===1?days[0]:undefined}]);return `C’est déplacé : « ${h.name} » à ${tm}.`}}
  if(has(t,'ajoute','creer','cree','programme','prevois','mets moi','j ai cours','j ai sport','j ai prevu','rendez vous','rdv')&&(time||has(t,'habitude'))){let name=(raw.replace(/^(ajoute(?:r)?|cr[eé]e(?:r)?|programme|pr[eé]vois|mets(?: moi)?)\s+/i,'').replace(/\s+(tous les jours|chaque jour|en semaine|le matin|le soir|demain|aujourd.?hui|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche).*/i,'').replace(/\s+(à|a|vers)\s+\d.*/,'').replace(/\s+\d{1,2}\s*[:hH].*/,'').replace(/\s+\d+\s*min.*/,'').trim());name=name.replace(/^(l habitde|l habitude|un|une|le|la|les)\s+/i,'').slice(0,60);if(!name||name.length<2)name='Nouveau créneau';const durM=raw.match(/(\d{1,3})\s*min/);const dur=durM?Math.max(1,+durM[1]):45;applyMaraActions([{type:'upsert_habit',name,time:time||'08:00',dur,days,cat:guessCat(name),alarm:true}]);return `C’est enregistré${N()} : « ${name} » à ${time||'08:00'} (${dur} min), ${days.length===7?'tous les jours':days.map(d=>DL[d]).join(', ')}.`;}
  return ''}
 function maraSnapshot(){const n=new Date();return{now:n.toISOString(),locale:n.toLocaleString('fr-FR'),weekday:DL[n.getDay()],firstName:fname(),habits:S.habits.map(h=>({id:h.id,name:h.name,desc:h.desc,cat:h.cat,icon:h.icon,time:h.time,dur:h.dur,days:(h.days||[]).map(d=>DL[d]),dayTimes:h.dayTimes||{},alarm:!!h.alarm,today:`${htime(h,n.getDay())}–${hm2(hend(h,n.getDay()))}`,doneToday:isDone(h,key(n))})),today:sched(n).map(h=>({name:h.name,start:htime(h,n.getDay()),end:hm2(hend(h,n.getDay())),dur:h.dur,done:isDone(h,key(n)),cat:(CAT[h.cat]||CAT.free)[0]})),week:[0,1,2,3,4,5,6].map(d=>({day:DL[d],items:S.habits.filter(h=>h.days.includes(d)).sort((a,b)=>htime(a,d).localeCompare(htime(b,d))).map(h=>({name:h.name,start:htime(h,d),end:hm2(hend(h,d)),dur:h.dur}))})),streak:streak(),moodToday:S.mood[key(n)]||null,memory:(S.mara&&S.mara.memory)||[],remaining:remaining().map(h=>h.name)}}

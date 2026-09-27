@@ -1,0 +1,13 @@
+AUBE — VERSION CORRIGÉE
+
+Aperçu local : ouvrez Aube-apercu.html dans un navigateur récent.
+Déploiement Netlify : déposez le contenu de ce dossier (index.html, app.js, sw.js, manifest.webmanifest et icônes) dans le dossier de publication.
+
+Modifications :
+- Confirmation de réinitialisation dans une fenêtre intégrée, stylisée et lisible.
+- Accueil : accès Mara et Mes notes en haut; suppression des doublons dans la barre d’humeur.
+- Retrait du texte « Voici ton programme d’aujourd’hui » de l’accueil.
+- Chat Mara en zone de texte multiligne : Entrée ajoute une ligne, Ctrl+Entrée/⌘+Entrée envoie.
+- Export de l’emploi du temps en image : généré localement depuis les données affichées, sans service externe.
+
+Les données restent dans le navigateur. Fais une sauvegarde depuis Profil → Données avant de remplacer une version utilisée.

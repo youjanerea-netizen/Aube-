@@ -11,3 +11,6 @@ Modifications :
 - Export de l’emploi du temps en image : généré localement depuis les données affichées, sans service externe.
 
 Les données restent dans le navigateur. Fais une sauvegarde depuis Profil → Données avant de remplacer une version utilisée.
+
+
+Mise à jour : affichage des heures après minuit sur 00:xx, ajout d'une liste de petites tâches dans la carte d'humeur et rappels aléatoires de notes/tâches en attente. Les notifications de rappel dépendent des autorisations et du maintien d'une activité de l'application/navigateur; le déclenchement garanti écran éteint n'est pas assuré sur tous les appareils.

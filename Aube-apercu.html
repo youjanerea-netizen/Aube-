@@ -281,6 +281,24 @@ function emoReply(raw){
 }
 
 /* Réponse pratique (planning, stats, aide) + repli sur l’émotionnel si rien ne correspond */
+
+function maraNowReply(n,cur){
+ const d=n.getDay(),k=key(n),items=sched(n).map(h=>({h,start:mins(htime(h,d)),end:mins(htime(h,d))+Number(h.dur||0),done:isDone(h,k)}));
+ const active=items.find(x=>!x.done&&cur>=x.start&&cur<x.end);
+ const next=items.find(x=>!x.done&&x.start>cur);
+ const upcoming=active?items.find(x=>!x.done&&x.start>=active.end):next;
+ if(active){
+   const left=active.end-cur;
+   return `Là, tu es dans « ${active.h.name} » (${hm2(active.start)}–${hm2(active.end)}). Il reste environ ${dlab(left)}.`
+     +(upcoming?` Ensuite : « ${upcoming.h.name} » à ${hm2(upcoming.start)} (${upcoming.h.dur} min).`:' C’est ta dernière activité prévue aujourd’hui.');
+ }
+ if(next){
+   const gap=next.start-cur;
+   return `Là, tu n’as pas d’activité prévue : tu es libre jusqu’à ${hm2(next.start)} (environ ${dlab(gap)}). Ensuite, tu as « ${next.h.name} » de ${hm2(next.start)} à ${hm2(next.end)}.`;
+ }
+ const planned=items.length;
+ return planned?`Il n’y a plus d’activité à venir dans ton planning aujourd’hui. Tu peux souffler${N()} 💙`:`Tu n’as rien de prévu aujourd’hui dans ton planning.`;
+}
 function answer(raw,soft){
  const t=norm(raw),n=new Date(),cur=n.getHours()*60+n.getMinutes(),td=remaining();
  if(hasAny(t,CR))return CRM();
@@ -290,6 +308,14 @@ function answer(raw,soft){
  if(early&&!wantsAct&&!has(t,'programme','planning','agenda','habitude','creneau','libre','prochain')){const acted=tryAct(raw);return acted||emoReply(raw)}
 
  let dy=null;if(has(t,'demain'))dy=(n.getDay()+1)%7;else if(has(t,'aujourd'))dy=n.getDay();else for(let i=0;i<7;i++)if(has(t,norm(DL[i])))dy=i;
+
+ // Les formulations « je fais quoi là ? », « qu'est-ce qu'on fait aujourd'hui ? »
+ // demandent l'état du moment, pas la récitation de tout l'agenda.
+ const fullAgenda=has(t,'programme complet','tout le programme','toute la journee','tous les horaires','liste des activites','emploi du temps','agenda complet','toutes les activites');
+ const asksNow=has(t,'maintenant','la tout de suite','en ce moment','la maintenant','je fais quoi','on fait quoi','quoi faire','qu est ce qu on fait','qu est ce que je fais','prochaine activite','apres');
+ if(!fullAgenda && (asksNow || (has(t,'aujourd hui')&&has(t,'quoi','faire','prevu','activite')))){
+   return maraNowReply(n,cur);
+ }
 
  // Questions naturelles sur une heure précise : « je fais quoi à 12h30 ? », « suis-je libre vers midi ? »
  const clockMatch=(raw.match(/\b(\d{1,2})(?:\s*[:h]\s*(\d{2}))?\s*(?:h(?:eures?)?)?\b/i)||[]);
@@ -651,7 +677,7 @@ del(){showDeleteHabit()},delConfirm(){if(!dr)return;S.habits=S.habits.filter(h=>
 
 pd(t){pd=+t.dataset.v;render()},
 mood(t){const k=key(new Date()),o=S.mood[k]||{th:[]},m=t.dataset.v,ch=o.m!==m;o.th=o.th||[];o.m=m;o.t=($('#note')||{}).value||o.t||'';S.mood[k]=o;if(ch)o.th.push({r:'a',t:moodReply(m)});save();render()},
-note(){const k=key(new Date()),o=S.mood[k]||{m:'',th:[]},v=$('#note').value.trim();o.th=o.th||[];o.t=v;S.mood[k]=o;if(v){o.th.push({r:'u',t:v},{r:'a',t:noteReply(o.m,v)});S.reflections=S.reflections||[];S.reflections.push({id:'r'+Date.now().toString(36),date:new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'}),day:k,m:o.m||'ok',t:v,created:Date.now()});}save();render()},
+note(){const k=key(new Date()),o=S.mood[k]||{m:'',th:[]},v=($('#note')||{}).value?.trim()||'';o.th=o.th||[];S.mood[k]=o;if(v){o.th.push({r:'u',t:v},{r:'a',t:noteReply(o.m,v)});S.reflections=S.reflections||[];S.reflections.push({id:'r'+Date.now().toString(36),date:new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'}),day:k,m:o.m||'ok',t:v,created:Date.now()});}o.t='';save();render()},
 cs(t){const id=t.dataset.id,img=pendingImg[id];delete pendingImg[id];sendTo(id,$('#'+id+'i').value,img)},cq(t){sendTo('pc',t.dataset.q)},cc(){showChatDelete('pc',-1)},chatDelOne(){if(!pendingChatDelete)return;const {id,idx}=pendingChatDelete,arr=chatThread(id);if(idx>=0&&idx<arr.length)arr.splice(idx,1);pendingChatDelete=null;document.getElementById('chat-delete-overlay')?.remove();persistChat(id,arr)},chatDelAll(){if(!pendingChatDelete)return;const id=pendingChatDelete.id;pendingChatDelete=null;document.getElementById('chat-delete-overlay')?.remove();persistChat(id,[])},chatDelCancel(){pendingChatDelete=null;document.getElementById('chat-delete-overlay')?.remove()},br(){br=!br;render()},
 ai(t){const f=t.files&&t.files[0];if(f)handleImage(t.dataset.id,f)},rmimg(t){delete pendingImg[t.dataset.id];const el=$('#'+t.dataset.id+'imgp');if(el)el.innerHTML=''},voice(t){startVoice(t.dataset.id)},
 name(){S.name=$('#nm').value.trim();save();render()},

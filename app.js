@@ -37,7 +37,7 @@ const ic=n=>`<svg class="i" viewBox="0 0 24 24">${P[n]||P.sun}</svg>`;
 /* Données */
 function seed(){const a=[['Réveil & mobilité','Étirements doux pour ouvrir la journée.','sport','sun','06:30',15,ALL],['Réviser les mathématiques','Un bloc calme avant le reste.','studies','book','07:15',45,WK],['Marche de midi','Sortir, marcher, revenir plus léger.','sport','bike','12:30',20,ALL],['Deep work','Un créneau protégé, sans notifications.','work','briefcase','14:00',90,WK],['30 min de programmation','Avancer un projet, même un peu.','studies','code','18:00',30,ALL],['Lecture du soir','Lire papier, loin de l’écran.','personal','book','21:00',20,ALL]];
 return{name:'',habits:a.map((x,i)=>({id:'h'+i,name:x[0],desc:x[1],cat:x[2],icon:x[3],time:x[4],dur:x[5],days:x[6],alarm:true,snd:''})),done:{},mood:{},prefs:{notif:false,snd:'urgent',vol:.9,snooze:10},fired:{}}}
-let S;try{S=JSON.parse(localStorage.getItem(K))}catch(e){}S=S||seed();S.reflections=Array.isArray(S.reflections)?S.reflections:[];S.prefs=S.prefs||{};
+let S;try{S=JSON.parse(localStorage.getItem(K))}catch(e){}S=S||seed();S.reflections=Array.isArray(S.reflections)?S.reflections:[];S.tasks=Array.isArray(S.tasks)?S.tasks:[];S.prefs=S.prefs||{};
 Object.entries(S.mood||{}).forEach(([day,m])=>{if(m&&m.t&&!S.reflections.some(r=>r.day===day&&r.t===m.t))S.reflections.push({id:'legacy-'+day,date:day,m:m.m||'ok',t:m.t,day,created:0})});if(S.prefs&&(!S.prefs.snd||S.prefs.snd==='aube'))S.prefs.snd='urgent';
 const save=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}try{scheduleAlarms()}catch(e){}};
 const col=h=>(CAT[h.cat]||CAT.free)[1];
@@ -88,7 +88,7 @@ const has=(t,...w)=>w.some(x=>new RegExp('\\b'+x).test(t));
 const hasAny=(t,arr)=>arr.some(x=>has(t,x));
 const pick=(a,skip)=>{if(a.length<2)return a[0];let i=Math.floor(Math.random()*a.length);if(skip!=null&&a.length>1)while(i===skip)i=Math.floor(Math.random()*a.length);return a[i]};
 const fname=()=>S.name.trim().split(' ')[0],N=()=>fname()?', '+fname():'';
-const mins=t=>+t.slice(0,2)*60+ +t.slice(3),hm2=m=>pad(Math.floor(m/60))+':'+pad(m%60),dlab=m=>(m>=60?Math.floor(m/60)+' h':'')+(m%60?(m>=60?' ':'')+m%60+' min':'');
+const mins=t=>+t.slice(0,2)*60+ +t.slice(3),hm2=m=>{const v=((Math.trunc(m)%1440)+1440)%1440;return pad(Math.floor(v/60))+':'+pad(v%60)},dlab=m=>(m>=60?Math.floor(m/60)+' h':'')+(m%60?(m>=60?' ':'')+m%60+' min':'');
 const remaining=()=>{const n=new Date(),k=key(n);return sched(n).filter(h=>!isDone(h,k))};
 const light=()=>{const r=remaining().sort((a,b)=>a.dur-b.dur)[0];return r?`\n\nSi tu veux, ne garde aujourd’hui que le plus léger : « ${r.name} » (${r.dur} min). Le reste peut attendre.`:'\n\nTu as tout terminé aujourd’hui : tu peux vraiment souffler.'};
 const lst=a=>a.map(h=>{const t=htime(h,new Date().getDay()),e=mins(t)+h.dur;return`• ${t}–${hm2(e)} · ${h.name} (${h.dur} min)`}).join('\n');
@@ -159,6 +159,24 @@ function emoReply(raw){
 }
 
 /* Réponse pratique (planning, stats, aide) + repli sur l’émotionnel si rien ne correspond */
+
+function maraNowReply(n,cur){
+ const d=n.getDay(),k=key(n),items=sched(n).map(h=>({h,start:mins(htime(h,d)),end:mins(htime(h,d))+Number(h.dur||0),done:isDone(h,k)}));
+ const active=items.find(x=>!x.done&&cur>=x.start&&cur<x.end);
+ const next=items.find(x=>!x.done&&x.start>cur);
+ const upcoming=active?items.find(x=>!x.done&&x.start>=active.end):next;
+ if(active){
+   const left=active.end-cur;
+   return `Là, tu es dans « ${active.h.name} » (${hm2(active.start)}–${hm2(active.end)}). Il reste environ ${dlab(left)}.`
+     +(upcoming?` Ensuite : « ${upcoming.h.name} » à ${hm2(upcoming.start)} (${upcoming.h.dur} min).`:' C’est ta dernière activité prévue aujourd’hui.');
+ }
+ if(next){
+   const gap=next.start-cur;
+   return `Là, tu n’as pas d’activité prévue : tu es libre jusqu’à ${hm2(next.start)} (environ ${dlab(gap)}). Ensuite, tu as « ${next.h.name} » de ${hm2(next.start)} à ${hm2(next.end)}.`;
+ }
+ const planned=items.length;
+ return planned?`Il n’y a plus d’activité à venir dans ton planning aujourd’hui. Tu peux souffler${N()} 💙`:`Tu n’as rien de prévu aujourd’hui dans ton planning.`;
+}
 function answer(raw,soft){
  const t=norm(raw),n=new Date(),cur=n.getHours()*60+n.getMinutes(),td=remaining();
  if(hasAny(t,CR))return CRM();
@@ -168,6 +186,14 @@ function answer(raw,soft){
  if(early&&!wantsAct&&!has(t,'programme','planning','agenda','habitude','creneau','libre','prochain')){const acted=tryAct(raw);return acted||emoReply(raw)}
 
  let dy=null;if(has(t,'demain'))dy=(n.getDay()+1)%7;else if(has(t,'aujourd'))dy=n.getDay();else for(let i=0;i<7;i++)if(has(t,norm(DL[i])))dy=i;
+
+ // Les formulations « je fais quoi là ? », « qu'est-ce qu'on fait aujourd'hui ? »
+ // demandent l'état du moment, pas la récitation de tout l'agenda.
+ const fullAgenda=has(t,'programme complet','tout le programme','toute la journee','tous les horaires','liste des activites','emploi du temps','agenda complet','toutes les activites');
+ const asksNow=has(t,'maintenant','la tout de suite','en ce moment','la maintenant','je fais quoi','on fait quoi','quoi faire','qu est ce qu on fait','qu est ce que je fais','prochaine activite','apres');
+ if(!fullAgenda && (asksNow || (has(t,'aujourd hui')&&has(t,'quoi','faire','prevu','activite')))){
+   return maraNowReply(n,cur);
+ }
 
  // Questions naturelles sur une heure précise : « je fais quoi à 12h30 ? », « suis-je libre vers midi ? »
  const clockMatch=(raw.match(/\b(\d{1,2})(?:\s*[:h]\s*(\d{2}))?\s*(?:h(?:eures?)?)?\b/i)||[]);
@@ -265,7 +291,7 @@ today(){const n=new Date(),k=key(n),s=sched(n),dn=s.filter(h=>isDone(h,k)),td=s.
 return`<header class="rise" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px"><div><p class="cap">${cap(n.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}))}</p><h1>${g}${fn?', '+esc(fn):''}</h1>${st?`<p class="mu" style="margin-top:4px;font-size:.9rem;color:#ff9a4c;display:flex;gap:4px;align-items:center">${ic('flame')}${st} jour${st>1?'s':''} de suite</p>`:''}</div><div style="display:flex;gap:8px;flex:none"><button class="fab" data-a="openMara" aria-label="Parler à Mara" title="Parler à Mara" style="width:48px;height:48px">${ic('spark')}</button><button class="fab" data-a="journal" aria-label="Mes notes" title="Mes notes enregistrées" style="width:48px;height:48px">${ic('book')}</button></div></header>
 ${S.name?'':`<section class="card rise"><h2>Bienvenue</h2><p class="mu" style="font-size:.9rem;margin-top:2px">Comment dois-je t’appeler ?</p><input id="nm" placeholder="Ton prénom" maxlength="30"><button class="btn" data-a="name">Continuer</button></section>`}
 <section class="card rise">${ring(pc,`${dn.length} / ${s.length} tâches terminées`)}<div class="st"><div><small>Prévues</small><b>${s.length}</b></div><div><small>Terminées</small><b>${dn.length}</b></div><div><small>Restantes</small><b>${td.length}</b></div></div></section>
-<section class="card rise"><h2>Comment tu vas${N()} ?</h2><p class="mu" style="font-size:.9rem;margin-top:2px">Choisis ton humeur et note une petite chose à retenir.</p><div class="mood-strip">${[['good','😊','Bien'],['ok','🙂','Ça va'],['mixed','😐','Mitigé'],['hard','😔','Dur'],['angry','😤','Énervé']].map(x=>`<button data-a="mood" data-v="${x[0]}" class="${m&&m.m===x[0]?'a':''}">${x[1]}<span>${x[2]}</span></button>`).join('')}</div><input id="note" placeholder="Une chose à améliorer demain…" value="${m?esc(m.t||''):''}" maxlength="200"><button class="btn g" data-a="note">Enregistrer</button></section>`},
+<section class="card rise"><h2>Comment tu vas${N()} ?</h2><p class="mu" style="font-size:.9rem;margin-top:2px">Choisis ton humeur et note une petite chose à retenir.</p><div class="mood-strip">${[['good','😊','Bien'],['ok','🙂','Ça va'],['mixed','😐','Mitigé'],['hard','😔','Dur'],['angry','😤','Énervé']].map(x=>`<button data-a="mood" data-v="${x[0]}" class="${m&&m.m===x[0]?'a':''}">${x[1]}<span>${x[2]}</span></button>`).join('')}</div><input id="note" placeholder="Une chose à améliorer demain…" value="${m?esc(m.t||''):''}" maxlength="200"><button class="btn g" data-a="note">Enregistrer</button><div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line)"><h3 style="margin:0 0 8px">Petites tâches à ne pas oublier</h3><p class="mu" style="font-size:.85rem;margin:0 0 10px">Ajoute une tâche ici : elle restera enregistrée jusqu’à ce que tu la coches comme terminée.</p><div style="display:flex;gap:8px;align-items:stretch"><input id="taskDraft" placeholder="Ex. préparer mon sac" maxlength="160" style="min-width:0;flex:1"><button class="btn g" data-a="taskAdd" style="width:auto;flex:none;padding:0 16px">Ajouter</button></div>${(S.tasks||[]).filter(x=>!x.done).length?`<div style="display:grid;gap:8px;margin-top:12px">${S.tasks.filter(x=>!x.done).map(x=>`<div style="display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:14px"><input type="checkbox" data-a="taskToggle" data-id="${x.id}" aria-label="Tâche terminée" style="width:20px;height:20px;flex:none"><span style="flex:1;min-width:0;overflow-wrap:anywhere">${esc(x.t)}</span><button class="iconbtn" data-a="taskDelete" data-id="${x.id}" aria-label="Supprimer la tâche">${ic('trash')}</button></div>`).join('')}</div>`:`<p class="mu" style="font-size:.85rem;margin-top:10px">Aucune tâche en attente pour le moment.</p>`}</div></section>`},
 mara(){const k=key(new Date()),m=S.mood[k];return`<div class="mara-screen rise"><header class="mara-top"><div class="mara-head"><span class="mara-avatar">${ic('spark')}</span><div><h1 style="font-size:1.55rem;margin:0">Mara</h1><small class="mu">Planning, habitudes et écoute — réunis</small>${maraStatus()}</div></div></header><section class="mara-thread">${chatBox(S.chat||[],'pc','Parle-moi de ton planning ou de ta journée…',`Je peux t’aider avec ton planning, chercher des heures libres, enregistrer une habitude, ou simplement t’écouter${N()}. Tu peux parler naturellement, avec tes expressions habituelles.`)}<button class="btn g mara-breathe" data-a="br">${ic('leaf')} ${br?'Arrêter':'Respirer 1 minute'}</button>${br?'<div class="br"><div class="bc"></div></div>':''}</section></div>`},
 habits(){return`<div class="top rise"><div><p class="cap">Ma routine</p><h1>Habitudes</h1></div><div style="display:flex;gap:8px"><button class="fab" data-a="organize" aria-label="Assistant d’organisation" title="Assistant d’organisation">${ic('spark')}</button><button class="fab" data-a="new" aria-label="Nouvelle habitude">${ic('plus')}</button></div></div><p class="mu" style="margin-top:6px;font-size:.9rem">${S.habits.length} habitude${S.habits.length>1?'s':''} · touche pour modifier</p>${S.habits.slice().sort((a,b)=>mins(htime(a,new Date().getDay()))-mins(htime(b,new Date().getDay()))).map(h=>hcard(h,key(new Date()),0)).join('')||`<div class="empty"><h2>Aucune habitude</h2><p>Crée la première avec le bouton +.</p></div>`}`},
 form(){const d=dr,fr=d.freq;return`<p class="cap">${d.id?'Modifier':'Nouvelle ligne'}</p><h1>${d.id?'Modifier l’habitude':'Créer une habitude'}</h1>
@@ -291,7 +317,7 @@ me(){const sn=(id,nm,cu)=>`<div class="sn ${S.prefs.snd===id?'a':''}"><button cl
 return`<header class="rise"><p class="cap">Réglages</p><h1>Profil</h1></header>
 <section class="card"><label class="f" style="margin:0">Ton prénom<input id="nm" value="${esc(S.name)}" maxlength="30" placeholder="Comment t’appeler ?"></label><button class="btn g" data-a="name">Enregistrer</button></section>
 <section class="card" style="padding-bottom:8px"><h2>Alarmes</h2><label class="tg"><span>Rappels activés</span><input type="checkbox" class="sw" data-a="pn" ${S.prefs.notif?'checked':''}></label><label class="tg"><span>Report</span><select data-a="psn" style="width:auto;margin:0">${[5,10,15,30].map(x=>`<option value="${x}" ${x===S.prefs.snooze?'selected':''}>${x} min</option>`).join('')}</select></label><label class="tg" style="display:block"><span style="display:flex;justify-content:space-between"><span>Volume</span><small>${Math.round(S.prefs.vol*100)}%</small></span><input type="range" min="10" max="100" value="${S.prefs.vol*100}" data-a="pvol"></label><p class="mu" style="font-size:.78rem;margin:0 0 8px">Sonnerie type app Horloge. L’alarme continue en arrière-plan tant que l’app reste ouverte ou installée, avec une notification.</p></section>
-<section class="card"><h2>Rappels de tes notes</h2><p class="mu" style="font-size:.85rem;margin:4px 0 10px">Aube peut te rappeler une note enregistrée une fois par semaine, à un moment variable. Les notifications doivent être autorisées.</p><label class="tg"><span>Rappel hebdomadaire</span><input type="checkbox" class="sw" data-a="reflectionNotify" ${S.prefs.reflectionNotify?'checked':''}></label></section><section class="card"><h2>Sons d’alarme</h2><p class="mu" style="font-size:.85rem;margin:2px 0 8px">Touche un nom pour le choisir par défaut. Chaque habitude peut aussi avoir son propre son.</p>${Object.entries(BI).map(([i,x])=>sn(i,x[0])).join('')}${CS.map(x=>sn(x.id,x.name,1)).join('')}<label class="btn g" style="cursor:pointer;color:var(--fg)">${ic('up')} Ajouter mon propre son<input type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.caf" data-a="as" hidden></label><p class="mu" style="font-size:.78rem;margin-top:8px">MP3, WAV, M4A, OGG… chaque fichier est vérifié et compressé (8 s, mono) pour rester léger. Les sons restent sur ton appareil.</p></section>
+<section class="card"><h2>Rappels de tes notes et tâches</h2><p class="mu" style="font-size:.85rem;margin:4px 0 10px">Aube peut t’envoyer un rappel aléatoire d’une note enregistrée ou d’une tâche en attente. Autorise les notifications pour les recevoir.</p><label class="tg"><span>Rappels aléatoires</span><input type="checkbox" class="sw" data-a="reflectionNotify" ${S.prefs.reflectionNotify?'checked':''}></label></section><section class="card"><h2>Sons d’alarme</h2><p class="mu" style="font-size:.85rem;margin:2px 0 8px">Touche un nom pour le choisir par défaut. Chaque habitude peut aussi avoir son propre son.</p>${Object.entries(BI).map(([i,x])=>sn(i,x[0])).join('')}${CS.map(x=>sn(x.id,x.name,1)).join('')}<label class="btn g" style="cursor:pointer;color:var(--fg)">${ic('up')} Ajouter mon propre son<input type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.caf" data-a="as" hidden></label><p class="mu" style="font-size:.78rem;margin-top:8px">MP3, WAV, M4A, OGG… chaque fichier est vérifié et compressé (8 s, mono) pour rester léger. Les sons restent sur ton appareil.</p></section>
 
 <section class="card"><h2>Données</h2><p class="mu" style="font-size:.85rem;margin-top:2px">Tout reste sur ton appareil.</p><button class="btn g" data-a="exp">${ic('down')} Exporter une sauvegarde</button><label class="btn g" style="cursor:pointer;color:var(--fg)">${ic('up')} Importer une sauvegarde<input type="file" accept="application/json" data-a="imp" hidden></label><button class="btn d" data-a="rst">Tout réinitialiser</button></section>`}
 };
@@ -305,11 +331,29 @@ function exportTimetableImage(){
  const blob=new Blob([svg],{type:'image/svg+xml;charset=utf-8'}),url=URL.createObjectURL(blob),img=new Image();img.onload=()=>{try{const canvas=document.createElement('canvas');canvas.width=W;canvas.height=H;const ctx=canvas.getContext('2d');ctx.drawImage(img,0,0);canvas.toBlob(png=>{if(!png)throw new Error('png');const out=URL.createObjectURL(png),a=document.createElement('a');a.href=out;a.download='aube-emploi-du-temps-'+norm(title).replace(/\s+/g,'-')+'.png';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(out),2000)},'image/png')}catch(e){downloadSVG()};URL.revokeObjectURL(url)};img.onerror=()=>downloadSVG();img.src=url;function downloadSVG(){const a=document.createElement('a');a.href=url;a.download='aube-emploi-du-temps-'+norm(title).replace(/\s+/g,'-')+'.svg';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000)}
 }
 function checkReflectionReminder(){
- if(!S.prefs.reflectionNotify||!S.reflections?.length||!('Notification'in window)||Notification.permission!=='granted')return;
- const now=new Date(),week=(()=>{const d=new Date(now);d.setHours(0,0,0,0);d.setDate(d.getDate()-((d.getDay()+6)%7));return key(d)})();
- if(S.prefs.reflectionSentWeek===week||now.getDay()===0||now.getHours()<9||now.getHours()>20)return;
- const entry=S.reflections[Math.floor(Math.random()*S.reflections.length)];
- try{new Notification('Aube · Un petit rappel pour toi',{body:entry.t,tag:'aube-reflection-'+week,icon:'icon-192.png'});S.prefs.reflectionSentWeek=week;save()}catch(e){}
+ if(!S.prefs.reflectionNotify||!('Notification'in window)||Notification.permission!=='granted')return;
+ const now=new Date(),day=key(now),minute=now.getHours()*60+now.getMinutes();
+ if(minute<9*60||minute>21*60)return;
+ const pool=[];
+ (S.reflections||[]).filter(x=>x&&x.t).forEach(x=>pool.push({kind:'note',text:x.t}));
+ (S.tasks||[]).filter(x=>x&&!x.done&&x.t).forEach(x=>pool.push({kind:'task',text:x.t}));
+ if(!pool.length)return;
+ if(S.prefs.reminderSentDay===day)return;
+ if(S.prefs.reminderDay!==day){
+   S.prefs.reminderDay=day;
+   S.prefs.reminderAt=9*60+Math.floor(Math.random()*(12*60+1));
+   save();
+ }
+ if(minute<S.prefs.reminderAt)return;
+ const entry=pool[Math.floor(Math.random()*pool.length)];
+ try{
+   const title=entry.kind==='task'?'Aube · Petit rappel de tâche':'Aube · Un rappel pour toi';
+   const body=entry.kind==='task'?'À faire : '+entry.text:entry.text;
+   if(navigator.serviceWorker&&navigator.serviceWorker.controller){
+     navigator.serviceWorker.ready.then(reg=>reg.showNotification(title,{body,tag:'aube-reminder-'+day,icon:'/icon-192.png',data:{url:'/'}})).catch(()=>{});
+   }else new Notification(title,{body,tag:'aube-reminder-'+day,icon:'icon-192.png'});
+   S.prefs.reminderSentDay=day;save();
+ }catch(e){}
 }
 const NAV=[['today','home','Accueil'],['habits','ccheck','Habitudes'],['plan','cal','Planning'],['stats','bars','Stats'],['me','user','Profil']];
 function render(){const h=(location.hash||'#today').slice(1),[r,id]=h.split('/');let v=V[r]?r:'today';
@@ -533,7 +577,10 @@ del(){showDeleteHabit()},delConfirm(){if(!dr)return;S.habits=S.habits.filter(h=>
 
 pd(t){pd=+t.dataset.v;render()},
 mood(t){const k=key(new Date()),o=S.mood[k]||{th:[]},m=t.dataset.v,ch=o.m!==m;o.th=o.th||[];o.m=m;o.t=($('#note')||{}).value||o.t||'';S.mood[k]=o;if(ch)o.th.push({r:'a',t:moodReply(m)});save();render()},
-note(){const k=key(new Date()),o=S.mood[k]||{m:'',th:[]},v=$('#note').value.trim();o.th=o.th||[];o.t=v;S.mood[k]=o;if(v){o.th.push({r:'u',t:v},{r:'a',t:noteReply(o.m,v)});S.reflections=S.reflections||[];S.reflections.push({id:'r'+Date.now().toString(36),date:new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'}),day:k,m:o.m||'ok',t:v,created:Date.now()});}save();render()},
+note(){const k=key(new Date()),o=S.mood[k]||{m:'',th:[]},v=($('#note')||{}).value?.trim()||'';o.th=o.th||[];S.mood[k]=o;if(v){o.th.push({r:'u',t:v},{r:'a',t:noteReply(o.m,v)});S.reflections=S.reflections||[];S.reflections.push({id:'r'+Date.now().toString(36),date:new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'}),day:k,m:o.m||'ok',t:v,created:Date.now()});}o.t='';save();render()},
+taskAdd(){const el=$('#taskDraft'),t=(el?.value||'').trim();if(!t)return;S.tasks=S.tasks||[];S.tasks.unshift({id:'task-'+Date.now().toString(36),t,done:false,created:Date.now()});save();render()},
+taskToggle(t){const x=(S.tasks||[]).find(x=>x.id===t.dataset.id);if(x){x.done=!!t.checked;x.completed=x.done?Date.now():null;save();render()}},
+taskDelete(t){S.tasks=(S.tasks||[]).filter(x=>x.id!==t.dataset.id);save();render()},
 cs(t){const id=t.dataset.id,img=pendingImg[id];delete pendingImg[id];sendTo(id,$('#'+id+'i').value,img)},cq(t){sendTo('pc',t.dataset.q)},cc(){showChatDelete('pc',-1)},chatDelOne(){if(!pendingChatDelete)return;const {id,idx}=pendingChatDelete,arr=chatThread(id);if(idx>=0&&idx<arr.length)arr.splice(idx,1);pendingChatDelete=null;document.getElementById('chat-delete-overlay')?.remove();persistChat(id,arr)},chatDelAll(){if(!pendingChatDelete)return;const id=pendingChatDelete.id;pendingChatDelete=null;document.getElementById('chat-delete-overlay')?.remove();persistChat(id,[])},chatDelCancel(){pendingChatDelete=null;document.getElementById('chat-delete-overlay')?.remove()},br(){br=!br;render()},
 ai(t){const f=t.files&&t.files[0];if(f)handleImage(t.dataset.id,f)},rmimg(t){delete pendingImg[t.dataset.id];const el=$('#'+t.dataset.id+'imgp');if(el)el.innerHTML=''},voice(t){startVoice(t.dataset.id)},
 name(){S.name=$('#nm').value.trim();save();render()},
@@ -621,6 +668,7 @@ document.addEventListener('focusout',e=>{if(e.target.matches('.mara-screen .cin 
 document.addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(!t||/^(INPUT|SELECT)$/.test(t.tagName)||!A[t.dataset.a])return;A[t.dataset.a](t)});
 document.addEventListener('input',e=>{const t=e.target;if(t.dataset.in&&dr){dr[t.dataset.in]=t.value}else if(t.dataset.daytime&&dr){dr.dayTimes=dr.dayTimes||{};dr.dayTimes[t.dataset.daytime]=t.value}else if(t.dataset.a==='pvol'){S.prefs.vol=t.value/100;save();if(cur&&cur.a)cur.a.volume=S.prefs.vol}});
 document.addEventListener('change',async e=>{const t=e.target,a=t.dataset.a;if(!a)return;
+if(a==='taskToggle'){A.taskToggle(t);return}
 if(a==='reflectionNotify'){if(t.checked){try{if(!('Notification'in window)){throw new Error('no-notification')}if(Notification.permission==='default')await Notification.requestPermission()}catch(x){}if(!('Notification'in window)||Notification.permission!=='granted'){t.checked=false;alert('Autorise les notifications dans les réglages du navigateur pour activer ce rappel.');return}}S.prefs.reflectionNotify=t.checked;save();render();return}
 if(a==='pn'){unlockAudio();if(t.checked){try{if(Notification.permission==='default')await Notification.requestPermission()}catch(x){}}S.prefs.notif=t.checked;keepAliveAudio(t.checked);holdWake(t.checked);scheduleAlarms()}
 else if(a==='psn')S.prefs.snooze=+t.value;else if(a==='pvol'){render();return}

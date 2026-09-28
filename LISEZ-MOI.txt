@@ -1,3 +1,50 @@
+MISE À JOUR 28/09/2026 — CORRECTIONS v6
+
+- Import des tableaux Jour | Horaire | Activité | Durée : la durée est utilisée pour calculer l’heure de fin, y compris après minuit. Les jours vides reprennent le dernier jour indiqué.
+- Saisie de la barre d’humeur : limite portée à 10 000 caractères et le champ se vide après l’enregistrement.
+- Import Profil → Données : taille maximale 10 Mo; le sélecteur accepte tous les types de fichiers, puis Aube vérifie le contenu reconnu (sauvegarde JSON/ZIP, texte/calendrier, image ou son).
+- L’import d’une sauvegarde demande Remplacer ou Fusionner et vérifie l’enregistrement sur l’appareil.
+
+MISE À JOUR 28/09/2026 — IMPORT DE FICHIERS, RESTAURATION, MARA « EMPLOI DU TEMPS »
+
+Vérifie que tu as la bonne version : en bas de Profil, il doit être écrit
+« Aube · version 28/09/2026 · import v5 ». Sinon, ton navigateur garde l'ancien fichier :
+recharge la page (ou vide le cache du site / réinstalle l'app), et pense à remplacer aussi
+sw.js sur Netlify.
+
+1) PROFIL → Données → « Importer un fichier » (10 Mo max)
+   - Sauvegarde Aube (.json ou .zip) : une fenêtre affiche ce qui a été trouvé (habitudes,
+     jours de suivi, tâches, notes) et demande « Remplacer » ou « Fusionner ». Ensuite une
+     barre de progression avec les étapes, puis « Restauration terminée ✓ » et un bouton
+     « Voir mes habitudes ». « Annuler la restauration » remet tes données d'avant.
+   - Emploi du temps en texte : .txt, .csv, .ics (calendrier), .docx → les activités sont
+     listées, tu choisis les jours si besoin, et elles deviennent des habitudes.
+   - Photo d'emploi du temps : la photo s'affiche à côté d'une saisie rapide.
+   - Son d'alarme (.mp3, .wav, .m4a…) : ajouté à « Sons d'alarme ».
+   - Fichier trop lourd, vide, abîmé ou d'un type inconnu : message clair.
+   - Le contenu de la sauvegarde est nettoyé avant restauration (heures vides, jours
+     invalides, doublons d'identifiants…) pour qu'un fichier un peu bancal ne casse plus l'app.
+   - Les grosses photos sont réduites (1600 px) pour ne pas saturer la mémoire de l'appareil.
+     Si l'espace se remplit quand même, un message le dit au lieu d'échouer en silence.
+
+2) MARA — emploi du temps collé
+   - La limite de 2000 caractères est supprimée (c'est elle qui coupait après « lundi »).
+   - Elle lit maintenant : « 05h00 – 06h00 Séance de sport », « de 5h à 6h », « 5h-6h Sport,
+     6h-6h10 Douche », les jours en titre ou en début de ligne, « du lundi au vendredi »,
+     « tous les jours », « week-end », les tableaux (|, ;, tabulation), les listes à puces,
+     les emojis, « (45 min) », « pendant 1h30 », le nom sur une ligne et l'heure sur la suivante.
+   - Elle crée directement les habitudes (plus besoin de valider chaque ligne), puis affiche un
+     récapitulatif avec « Annuler cet ajout » et « Vérifier / modifier les lignes ».
+   - Sans jour précisé : « tous les jours ». Dis « remplace mon planning » pour remplacer.
+
+3) MARA — photo d'emploi du temps
+   - Sans internet, Aube n'a pas de lecteur de texte pour les images : si le navigateur
+     propose un détecteur de texte intégré (Chrome/Android récents), il est utilisé
+     automatiquement. Sinon, la photo s'ouvre en haut de la fenêtre (touche-la pour
+     l'agrandir) avec « + Ajouter une ligne à la main ». Astuce : « Copier le texte de
+     l'image » (Google Lens) puis coller dans Mara : elle fait tout en une fois.
+
+---- HISTORIQUE ----
 MISE À JOUR TÂCHES : Accueil → « Mes tâches » sert seulement à ajouter (logo courses / ménage / cuisine / idées / oublis + « Ajouter »). La tâche est rangée dans Mes tâches (icône livre), sans barre d'ajout, en cartes façon Habitudes avec coche ronde. Les cartes ne rejouent plus leur fondu quand on reste sur la même page.
 
 AUBE — MISE À JOUR (humeur/tâches en carte retournable, import corrigé, Mara refondue)

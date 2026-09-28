@@ -179,7 +179,9 @@ function seed(){const a=[['Réveil & mobilité','Étirements doux pour ouvrir la
 return{name:'',habits:a.map((x,i)=>({id:'h'+i,name:x[0],desc:x[1],cat:x[2],icon:x[3],time:x[4],dur:x[5],days:x[6],alarm:true,snd:''})),done:{},mood:{},prefs:{notif:false,snd:'urgent',vol:.9,snooze:10},fired:{}}}
 let S;try{S=JSON.parse(localStorage.getItem(K))}catch(e){}S=S||seed();S.reflections=Array.isArray(S.reflections)?S.reflections:[];S.tasks=Array.isArray(S.tasks)?S.tasks:[];S.prefs=S.prefs||{};
 Object.entries(S.mood||{}).forEach(([day,m])=>{if(m&&m.t&&!S.reflections.some(r=>r.day===day&&r.t===m.t))S.reflections.push({id:'legacy-'+day,date:day,m:m.m||'ok',t:m.t,day,created:0})});if(S.prefs&&(!S.prefs.snd||S.prefs.snd==='aube'))S.prefs.snd='urgent';
-const save=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}try{scheduleAlarms()}catch(e){}};
+let saveWarned=false;
+const persist=()=>{try{localStorage.setItem(K,JSON.stringify(S));return true}catch(e){return false}};
+const save=()=>{if(!persist()){for(const k of[3,1,0]){slimImages(k);if(persist())break}if(!persist()&&!saveWarned){saveWarned=true;setTimeout(()=>{try{showInfoModal('Espace de stockage plein','Aube n’arrive plus à enregistrer sur cet appareil. Fais une sauvegarde (Profil → Données → Exporter), puis libère de l’espace : supprime des photos du chat ou des sons personnalisés.',{danger:true,icon:'x'})}catch(e){}},0)}}try{scheduleAlarms()}catch(e){}};
 const col=h=>(CAT[h.cat]||CAT.free)[1];
 const htime=(h,day)=>h.dayTimes&&h.dayTimes[day]||h.time;
 const hend=(h,day)=>mins(htime(h,day))+Number(h.dur||0);
@@ -434,7 +436,7 @@ function emoReply(raw){
  ctx.lastIdx[it]=idx;
  let r=bank[idx]();
  if(ctx.lastIt===it&&it&&!['general','help','ack','laugh','greet','thanks','bye','joke','motivate','weather','offline','name','creator','howru','confused'].includes(it))r=pick(['Tu m’en reparles, et c’est très bien. ','Toujours sur ce sujet, je reste avec toi. ',''])+r;
- ctx.lastIt=it;ctx.turns.push({u:raw,it});if(ctx.turns.length>24)ctx.turns.shift();
+ ctx.lastIt=it;ctx.turns.push({u:String(raw).slice(0,300),it});if(ctx.turns.length>24)ctx.turns.shift();
  if(raw.length>140)r+=`\n\nTu m’as donné beaucoup de détails, merci pour ta confiance${N()}.`;
  save();
  return r;
@@ -721,7 +723,7 @@ function answer(raw,soft){
  if(has(t,'alarme','sonnerie','notification')||/\bson\b/.test(t))return'Profil → Alarmes pour activer les rappels, puis « Sons d’alarme » pour choisir un son ou importer le tien.';
  if(has(t,'hors ligne','hors connexion','internet','installer'))return'Ouvre l’app une première fois en ligne, puis installe-la via le menu ⋮ de Chrome → « Installer l’application ». Ensuite, tout marche sans connexion, moi y compris.';
  if(has(t,'ajouter','creer','nouvelle habitude'))return'Onglet Habitudes, puis le bouton + en haut à droite. Tu peux aussi juste me dire « ajoute [nom] à [heure] » ici, je m’en occupe directement.';
- if(has(t,'sauvegard','export','import'))return'Profil → Données : tu peux exporter ou importer une sauvegarde.';
+ if(has(t,'sauvegard','export','import'))return'Profil → Données : tu peux exporter une sauvegarde, ou importer un fichier (sauvegarde .json/.zip, emploi du temps, photo…, 10 Mo max) avec une barre de progression.';
  if(has(t,'conseil','astuce','constan','regularit','routine')&&!has(t,'comment tu')){const ctx=MCTX();let i=Math.floor(Math.random()*TIPS.length);if(TIPS.length>1)while(i===ctx.lastTip)i=Math.floor(Math.random()*TIPS.length);ctx.lastTip=i;save();return TIPS[i]}
 
  const it=intent(t);
@@ -730,16 +732,20 @@ function answer(raw,soft){
 }
 
 
-const QS=['Qu’est-ce qu’on fait aujourd’hui ?','Je fais quoi maintenant ?','Ma prochaine tâche ?','Quand suis-je libre aujourd’hui ?','Mon programme de demain','Il me reste quoi à faire ?','Comment je m’en sors ?','Un conseil pour être constant(e)','Je suis fatigué(e)','Raconte-moi une blague'];
+const QS=['Qu’est-ce qu’on fait aujourd’hui ?','Je fais quoi maintenant ?','Ma prochaine tâche ?','Ajouter mon emploi du temps','Quand suis-je libre aujourd’hui ?','Mon programme de demain','Il me reste quoi à faire ?','Comment je m’en sors ?','Un conseil pour être constant(e)','Je suis fatigué(e)','Raconte-moi une blague'];
 const bub=m=>`<div class="bu ${m.r}">${esc(m.t).replace(/\n/g,'<br>')}${m.img?`<br><img src="${m.img}" style="max-width:100%;border-radius:12px;margin-top:6px">`:''}</div>`;
 let typing='';
-const chatBox=(arr,id,ph,hi)=>`<div class="chat" id="${id}box">${arr.length?arr.map(bub).join(''):bub({r:'a',t:hi})}${typing===id?'<div class="typ"><i></i><i></i><i></i></div>':''}</div><div id="${id}imgp"></div><div class="cin"><textarea id="${id}i" data-enter="${id}" rows="2" placeholder="${ph}" maxlength="2000" autocomplete="off" name="mara-message" autocapitalize="sentences" spellcheck="true" enterkeyhint="enter" inputmode="text" aria-label="Message à Mara"></textarea><button class="fab" data-a="cs" data-id="${id}" aria-label="Envoyer">${ic('send')}</button></div><div class="chat-tools"><label class="btn g chat-image-pick" style="cursor:pointer" aria-label="Joindre une image" title="Joindre une image">${ic('img')}<input type="file" accept="image/*" data-a="ai" data-id="${id}" hidden></label><button type="button" data-a="voice" data-id="${id}" class="${voiceRec===id?'rec':''}">${ic('mic')} ${voiceRec===id?'Écoute…':'Vocal'}</button></div>`;
-const assistant=()=>`<section class="card"><div class="mara-head"><span class="mara-avatar">${ic('spark')}</span><div><h2>Mara</h2><small class="mu">Elle connaît tout ton planning</small></div></div><div class="qs">${QS.map(q=>`<button data-a="cq" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div>${chatBox(S.chat||[],'pc','Pose-moi une question…',`Salut${N()} ! Je retiens tes habitudes et tes horaires. Demande-moi ta journée, un créneau libre, d’ajouter un rdv… ou parle-moi normalement.`)}${(S.chat||[]).length?`<button class="btn d" style="height:40px;margin-top:6px" data-a="cc">Effacer la conversation</button>`:''}</section>`;
+const chatBox=(arr,id,ph,hi)=>`<div class="chat" id="${id}box">${arr.length?arr.map(bub).join(''):bub({r:'a',t:hi})}${typing===id?'<div class="typ"><i></i><i></i><i></i></div>':''}</div><div id="${id}imgp"></div><div class="cin"><textarea id="${id}i" data-enter="${id}" rows="2" placeholder="${ph}" autocomplete="off" name="mara-message" autocapitalize="sentences" spellcheck="true" enterkeyhint="enter" inputmode="text" aria-label="Message à Mara"></textarea><button class="fab" data-a="cs" data-id="${id}" aria-label="Envoyer">${ic('send')}</button></div><div class="chat-tools"><label class="btn g chat-image-pick" style="cursor:pointer" aria-label="Joindre une image" title="Joindre une image">${ic('img')}<input type="file" accept="image/*" data-a="ai" data-id="${id}" hidden></label><button type="button" data-a="voice" data-id="${id}" class="${voiceRec===id?'rec':''}">${ic('mic')} ${voiceRec===id?'Écoute…':'Vocal'}</button></div>`;
+const assistant=()=>`<section class="card"><div class="mara-head"><span class="mara-avatar">${ic('spark')}</span><div><h2>Mara</h2><small class="mu">Elle connaît tout ton planning</small></div></div><div class="qs">${QS.map(q=>`<button data-a="cq" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div>${chatBox(S.chat||[],'pc','Pose une question ou colle ton emploi du temps…',`Salut${N()} ! Je retiens tes habitudes et tes horaires. Demande-moi ta journée, un créneau libre, d’ajouter un rdv… ou parle-moi normalement.`)}${(S.chat||[]).length?`<button class="btn d" style="height:40px;margin-top:6px" data-a="cc">Effacer la conversation</button>`:''}</section>`;
 const thr=id=>{if(id==='pc')return S.chat=S.chat||[];const k=key(new Date());S.mood[k]=S.mood[k]||{m:'',t:'',th:[]};return S.mood[k].th=S.mood[k].th||[]};
 const pendingImg={};
-function sendTo(id,tx,img){tx=(tx||'').trim();if(!tx&&!img)return;const a=thr(id);a.push({r:'u',t:tx||'(photo envoyée)',img});save();rf=id;typing=id;render();
- setTimeout(()=>{typing='';let reply,imp=false;try{imp=has(norm(tx),'emploi du temps','emploi de temps','edt','horaires','planning','agenda','importe')&&(img||parseSchedule(tx).rows.length>=2)}catch(e){}try{reply=imp?`Je m’en occupe${N()}. J’ouvre l’assistant d’import : je range les heures et les noms, et tu valides chaque ligne avant que j’enregistre quoi que ce soit.`:img&&!tx?`Merci pour la photo${N()} 💙 Décris-moi ce qu’elle montre et on en parle.`:(tryAct(tx)||answer(tx,id==='sc'))}catch(err){reply=`J’ai rencontré un petit souci en préparant ma réponse${N()}. Réessaie en reformulant, ou demande-moi directement l’heure, la prochaine activité ou tes créneaux libres.`}
- a.push({r:'a',t:reply});if(a.length>80)a.splice(0,a.length-80);save();rf=id;render();if(imp)setTimeout(()=>openImport(tx,img),60)},180)}
+function sendTo(id,tx,img){tx=(tx||'').trim();if(!tx&&!img)return;const a=thr(id);
+ const shown=tx.length>700?tx.slice(0,500)+`…\n(+${tx.length-500} caractères de texte collé)`:tx;
+ a.push({r:'u',t:shown||'(photo envoyée)',img});save();rf=id;typing=id;render();
+ setTimeout(async()=>{let reply,after=null;
+  try{const r=await maraSchedule(tx,img,id);if(r){reply=r.reply;after=r.after}else reply=tryAct(tx)||answer(tx,id==='sc')}
+  catch(err){reply=`J’ai rencontré un petit souci en préparant ma réponse${N()}. Réessaie en reformulant, ou demande-moi directement l’heure, la prochaine activité ou tes créneaux libres.`}
+  typing='';a.push({r:'a',t:reply});if(a.length>80)a.splice(0,a.length-80);save();rf=id;render();if(after)setTimeout(after,60)},180)}
 let voiceRec='';
 function startVoice(id){
  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -747,7 +753,9 @@ function startVoice(id){
  try{const r=new SR();r.lang='fr-FR';r.interimResults=false;r.maxAlternatives=1;voiceRec=id;render();
  r.onresult=e=>{const el=$('#'+id+'i');if(el)el.value=e.results[0][0].transcript};
  r.onerror=()=>{voiceRec='';render()};r.onend=()=>{voiceRec='';render()};r.start()}catch(e){voiceRec='';alert('Micro indisponible. Sur certains navigateurs, la reconnaissance vocale a aussi besoin d’une connexion.')}}
-function handleImage(id,file){if(!file)return;const r=new FileReader();r.onload=()=>{const el=$('#'+id+'imgp');if(el)el.innerHTML=`<div class="attach-preview"><img src="${r.result}" alt=""><span>Image prête à envoyer.</span><button data-a="rmimg" data-id="${id}" aria-label="Retirer">${ic('x')}</button></div>`;pendingImg[id]=r.result};r.readAsDataURL(file)}
+function handleImage(id,file){if(!file)return;if(file.size>10*1024*1024){alert('Image trop lourde (10 Mo max).');return}
+ const el=$('#'+id+'imgp');if(el)el.innerHTML='<div class="attach-preview"><span>Préparation de l’image…</span></div>';
+ readDataUrl(file).then(u=>shrinkDataUrl(u,1600,.82)).then(url=>{pendingImg[id]=url;const e2=$('#'+id+'imgp');if(e2)e2.innerHTML=`<div class="attach-preview"><img src="${url}" alt=""><span>Image prête à envoyer.</span><button data-a="rmimg" data-id="${id}" aria-label="Retirer">${ic('x')}</button></div>`}).catch(()=>{const e2=$('#'+id+'imgp');if(e2)e2.innerHTML='';alert('Impossible de lire cette image.')})}
 
 
 
@@ -839,7 +847,7 @@ return`<header class="rise"><p class="cap">Réglages</p><h1>Profil</h1></header>
 <section class="card" style="padding-bottom:8px"><h2>Alarmes</h2><label class="tg"><span>Rappels activés</span><input type="checkbox" class="sw" data-a="pn" ${S.prefs.notif?'checked':''}></label><label class="tg"><span>Report</span><select data-a="psn" style="width:auto;margin:0">${[5,10,15,30].map(x=>`<option value="${x}" ${x===S.prefs.snooze?'selected':''}>${x} min</option>`).join('')}</select></label><label class="tg" style="display:block"><span style="display:flex;justify-content:space-between"><span>Volume</span><small>${Math.round(S.prefs.vol*100)}%</small></span><input type="range" min="10" max="100" value="${S.prefs.vol*100}" data-a="pvol"></label><p class="mu" style="font-size:.78rem;margin:0 0 8px">Sonnerie type app Horloge. L’alarme continue en arrière-plan tant que l’app reste ouverte ou installée, avec une notification.</p></section>
 <section class="card"><h2>Rappels de tes notes et tâches</h2><p class="mu" style="font-size:.85rem;margin:4px 0 10px">Aube peut t’envoyer un rappel aléatoire d’une note enregistrée ou d’une tâche en attente. Autorise les notifications pour les recevoir.</p><label class="tg"><span>Rappels aléatoires</span><input type="checkbox" class="sw" data-a="reflectionNotify" ${S.prefs.reflectionNotify?'checked':''}></label></section><section class="card"><h2>Sons d’alarme</h2><p class="mu" style="font-size:.85rem;margin:2px 0 8px">Touche un nom pour le choisir par défaut. Chaque habitude peut aussi avoir son propre son.</p>${Object.entries(BI).map(([i,x])=>sn(i,x[0])).join('')}${CS.map(x=>sn(x.id,x.name,1)).join('')}<label class="btn g" style="cursor:pointer;color:var(--fg)">${ic('up')} Ajouter mon propre son<input type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.caf" data-a="as" hidden></label><p class="mu" style="font-size:.78rem;margin-top:8px">MP3, WAV, M4A, OGG… chaque fichier est vérifié et compressé (8 s, mono) pour rester léger. Les sons restent sur ton appareil.</p></section>
 
-<section class="card"><h2>Données</h2><p class="mu" style="font-size:.85rem;margin-top:2px">Tout reste sur ton appareil.</p><button class="btn g" data-a="exp">${ic('down')} Exporter une sauvegarde</button><label class="btn g" style="cursor:pointer;color:var(--fg)">${ic('up')} Importer une sauvegarde<input type="file" accept=".json,application/json,text/plain" data-a="imp" hidden></label><button class="btn d" data-a="rst">Tout réinitialiser</button></section>`}
+<section class="card"><h2>Données</h2><p class="mu" style="font-size:.85rem;margin-top:2px">Tout reste sur ton appareil.</p><button class="btn g" data-a="exp">${ic('down')} Exporter une sauvegarde</button><label class="btn g" style="cursor:pointer;color:var(--fg)">${ic('up')} Importer un fichier<input type="file" data-a="impf" hidden></label><p class="mu" style="font-size:.78rem;margin:8px 0 2px">Jusqu’à 10 Mo. Sauvegarde Aube (.json ou .zip) : tout est restauré dans Habitudes, Tâches, Notes… avec une barre de progression. Emploi du temps (.txt, .csv, .ics, .docx), photo d’emploi du temps ou son d’alarme aussi.</p><button class="btn d" data-a="rst">Tout réinitialiser</button></section><p class="mu" style="text-align:center;font-size:.72rem;margin:14px 0 4px">Aube · version ${BUILD}</p>`}
 };
 function exportTimetableImage(){
  const hs=S.habits.filter(h=>h.days.includes(pd)).slice().sort((a,b)=>mins(htime(a,pd))-mins(htime(b,pd)));
@@ -861,7 +869,7 @@ function checkReflectionReminder(){
  if(S.prefs.reminderSentDay===day)return;
  if(S.prefs.reminderDay!==day){
    S.prefs.reminderDay=day;
-   S.prefs.reminderAt=9*60+Math.floor(Math.random()*(12*60+1));
+   S.prefs.reminderAt=20*60;
    save();
  }
  if(minute<S.prefs.reminderAt)return;
@@ -898,26 +906,390 @@ document.addEventListener('click',e=>{if(lpFired){e.preventDefault();e.stopImmed
 document.addEventListener('contextmenu',e=>{if(e.target.closest('.hc'))e.preventDefault()});
 /* ── Import d'un emploi du temps : texte collé (ou lu par Google Lens depuis une image) ──
    Rien n'est enregistré sans vérification : l'utilisatrice contrôle chaque ligne. */
-const IMP_STOP=/^(horaires?|heures?|activites?|jours?|emploi du temps|planning|programme|agenda|matieres?|taches?)$/;
+const IMP_STOP=/^(horaires?|heures?|activites?|jours?|jour|emploi du temps|emploi de temps|planning|programme|agenda|matieres?|taches?|habitudes?|debut|fin|duree|nom|titre|semaine type|ma semaine|mon planning|mon emploi du temps|voici|voila)$/;
+const DAY_WORDS={lundi:1,lun:1,mardi:2,mar:2,mercredi:3,mer:3,jeudi:4,jeu:4,vendredi:5,ven:5,samedi:6,sam:6,dimanche:0,dim:0};
+const DAY_RE='(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|lun|mar|mer|jeu|ven|sam|dim)';
 function parseSchedule(text){
- const T='(\\d{1,2})\\s*(?:h|:)\\s*(\\d{2})?',R=new RegExp(T+'\\s*-\\s*'+T,'i'),S1=new RegExp(T,'i'),ok=(h,m)=>Number(h)<24&&Number(m||0)<60,toM=(h,m)=>Number(h)*60+Number(m||0);
- let src=String(text||'').replace(/[–—−]/g,'-').replace(/\s+à\s+(?=\d)/g,' - ');
- if(!/\n/.test(src))src=src.replace(new RegExp('(?<=\\S)\\s+(?='+T+'\\s*-\\s*'+T+')','gi'),'\n');
- const rows=[],pT=[],pN=[];let days=null,first=null;
- const flush=()=>{while(pT.length&&pN.length){const t=pT.shift();rows.push({name:pN.shift(),s:t[0],e:t[1],days:days&&[...days]})}};
- const clean=x=>x.replace(/\b(de|du|entre|vers)\s*$/i,'').replace(/^[\s:,;.\-]+|[\s:,;.\-]+$/g,'').replace(/\s+/g,' ');
- for(let line of src.split(/\n+/)){
-  line=line.replace(/[•·*_|]/g,' ').trim();if(!line)continue;
-  const n=norm(line);if(IMP_STOP.test(n))continue;
-  const di=DL.findIndex(d=>n===norm(d));if(di>=0){days=[di];first=first||[di];continue}
-  const r=R.exec(line);
-  if(r&&ok(r[1],r[2])&&ok(r[3],r[4])){const name=clean(line.slice(0,r.index)+' '+line.slice(r.index+r[0].length)),s=toM(r[1],r[2]),e=toM(r[3],r[4]);if(name)rows.push({name,s,e,days:days&&[...days]});else{pT.push([s,e]);flush()}continue}
-  const t=S1.exec(line);
-  if(t&&ok(t[1],t[2])){const name=clean(line.replace(t[0],' '));if(name)rows.push({name,s:toM(t[1],t[2]),e:null,days:days&&[...days]});else{pT.push([toM(t[1],t[2]),null]);flush()}continue}
-  if(/[a-zà-ÿ]/i.test(line)){pN.push(clean(line));flush()}
+ const toM=(h,m)=>Number(h)*60+Number(m||0);
+ const okT=(h,m)=>Number(h)<24&&Number(m||0)<60;
+ /* Nettoyage global : tirets/flèches → "-", « à / jusqu'à / au » entre deux heures → "-", emojis et puces retirés */
+ let src=String(text||'').replace(/\r/g,'\n').replace(/\u00a0|\u202f/g,' ')
+  .replace(/[–—−‒―→➜➔➡⇒⟶~]/g,'-').replace(/\s*(?:>|=>)\s*(?=\d)/g,' - ')
+  .replace(/(\d)\s*(?:h|:|H)\s*(\d{2})?\s*(?:à|a|jusqu['’ ]?à|jusqu['’ ]?a|au|jusqu['’ ]?au|until|to)\s*(?=\d)/gi,(m,a,b)=>a+'h'+(b||'')+' - ')
+  .replace(/\bde\s+(?=\d{1,2}\s*(?:h|:))/gi,'')
+  .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu,' ');
+ /* Horaire : 5h, 05h00, 5 h 30, 05:00, 5H */
+ const TS='(\\d{1,2})\\s*(?:h|H|:)\\s*(\\d{2})?(?!\\d)';
+ const RANGE=new RegExp(TS+'\\s*-\\s*'+TS);
+ const ONE=new RegExp(TS);
+ const DUR=/\(?\b(?:pendant|durée|duree|dur\.?|pour)?\s*:?\s*(\d{1,3})\s*(?:min|mn|minutes?)\b\)?|\(?\b(?:pendant|durée|duree|dur\.?)\s*:?\s*(\d{1,2})\s*h(?:eures?)?\s*(\d{2})?\b\)?|\((\d{1,2})\s*h\s*(\d{2})?\)/i;
+ const norm2=s=>s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[’']/g,' ').replace(/[^\p{L}\p{N}\s]/gu,' ').replace(/\s+/g,' ').trim();
+ /* Jours cités dans un fragment : « lundi, mercredi et vendredi », « du lundi au vendredi », « tous les jours », « week-end »… */
+ const parseDays=frag=>{
+  const n=norm2(frag);if(!n)return null;
+  if(/\b(tous les jours|chaque jour|quotidien|7 ?j ?7|toute la semaine)\b/.test(n))return[0,1,2,3,4,5,6];
+  if(/\b(week ?end|weekend|we)\b/.test(n)&&!new RegExp('\\b'+DAY_RE+'\\b').test(n))return[6,0];
+  if(/\b(en semaine|jours ouvres|jours de semaine)\b/.test(n))return[1,2,3,4,5];
+  const rg=new RegExp('\\b(?:du\\s+)?('+DAY_RE+')\\s+(?:au|a|->|-)\\s+('+DAY_RE+')\\b').exec(n);
+  if(rg){const a=DAY_WORDS[rg[1]],b=DAY_WORDS[rg[2]],out=[];let d=a,g=0;while(g++<8){out.push(d);if(d===b)break;d=(d+1)%7}return out}
+  const out=[];const re=new RegExp('\\b('+DAY_RE+')s?\\b','g');let m;
+  while((m=re.exec(n))){const d=DAY_WORDS[m[1]];if(d!=null&&!out.includes(d))out.push(d)}
+  return out.length?out:null;
+ };
+ /* Une ligne « jour seul » : ne contient (presque) que des noms de jours, date éventuelle, ponctuation */
+ const dayOnly=line=>{
+  const n=norm2(line);if(!n)return null;
+  const stripped=n.replace(new RegExp('\\b'+DAY_RE+'s?\\b','g'),' ').replace(/\b(du|au|a|et|le|les|de|chaque|tous|jours|jour|semaine|en|week|end|weekend|ouvres|toute|la|planning|programme|emploi|temps|matin|soir|apres|midi|\d{1,2}|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\b/g,' ').replace(/\s+/g,' ').trim();
+  if(stripped)return null;
+  return parseDays(line);
+ };
+ const clean=x=>x.replace(/\(\s*-?\s*\)/g,' ').replace(/^\s*\d+[.)]\s+/,'')
+  .replace(/^[^:]{0,40}\b(?:planning|emploi du temps|emploi de temps|programme|horaires|agenda|journée|journee|semaine)\b[^:]*:\s*/i,'')
+  .replace(/\b(de|du|d|entre|vers|à|a|le|la|les|pour|pendant|dès|des|jusqu|jusque)\s*$/i,'').replace(/^(?:à|vers|dès)\s+/i,'')
+  .replace(/^[\s:,;.\-–|/\\()]+|[\s:,;.\-–|/\\()]+$/g,'').replace(/\s+/g,' ').trim();
+ const rows=[],pT=[],pN=[];let days=null,first=null,dayless=0;
+ const push=(name,s,e,d,dur)=>{
+  if(dur&&e==null)e=s+dur;
+  rows.push({name,s,e,days:d&&d.length?[...d]:null})
+ };
+ const flush=()=>{while(pT.length&&pN.length){const t=pT.shift();push(pN.shift(),t[0],t[1],days,t[2])}};
+ const durOf=line=>{
+  const m=DUR.exec(line);if(!m)return{line,dur:0};
+  let d=0;if(m[1])d=+m[1];else if(m[2])d=+m[2]*60+Number(m[3]||0);else if(m[4])d=+m[4]*60+Number(m[5]||0);
+  if(!d||d>1000)return{line,dur:0};
+  return{line:line.replace(m[0],' '),dur:d};
+ };
+ /* Découpe : si tout est sur une seule ligne, on coupe avant chaque horaire ou jour */
+ if(!/\n/.test(src.trim())){
+  src=src.replace(new RegExp('(?<=\\S)\\s+(?=(?:'+DAY_RE+')\\b\\s*:?)','gi'),'\n').replace(new RegExp('(?<=[^\\d\\s\\-])\\s+(?='+TS+'\\s*-\\s*'+TS+')','gi'),'\n');
  }
- return{rows,days:first,leftover:pT.length+pN.length};
+ /* Tableaux / CSV : « | » et tabulations en séparateurs ; « ; » aussi. On garde les virgules dans les noms. */
+ const lines=src.split(/\n+/).map(l=>l.replace(/\t+/g,' | ').replace(/;/g,' | ').replace(/[•·▪●◦■□☐☑✔✓✅❌*_#>]/g,' ').replace(/\s+/g,' ').trim()).filter(Boolean);
+ for(let li=0;li<lines.length;li++){
+  let line=lines[li];
+  let cells=line.split('|').map(x=>x.trim()).filter(Boolean);
+  /* En-têtes de tableau / lignes de séparation */
+  if(!cells.length||/^[-\s|:=+]+$/.test(line))continue;
+  const n=norm2(line);
+  if(IMP_STOP.test(n))continue;
+  if(cells.length>1&&cells.every(c=>IMP_STOP.test(norm2(c))||new RegExp('^'+DAY_RE+'$').test(norm2(c))))continue;
+  /* Ligne de jour(s) seule(s) */
+  const dOnly=dayOnly(line.replace(/[|:]+/g,' '));
+  if(dOnly){days=dOnly;first=first||dOnly;flush();continue}
+  /* Jour(s) en début de ligne suivis d'autre chose : « Lundi : 05h-06h Sport », « Lundi | 05:00 | 06:00 | Sport » */
+  let lineDays=null;
+  const lead=new RegExp('^\\s*((?:(?:du\\s+)?'+DAY_RE+'s?(?:\\s*(?:,|/|et|au|-|&)\\s*)?)+)\\s*(?::|\\||-)?\\s*(?=\\S)','i').exec(line);
+  if(lead&&/\d/.test(line.slice(lead[0].length))){lineDays=parseDays(lead[1]);line=line.slice(lead[0].length)}
+  else{
+   const tail=new RegExp('\\(?\\s*((?:'+DAY_RE+'s?(?:\\s*(?:,|/|et|&)\\s*)?)+)\\s*\\)?\\s*$','i').exec(line);
+   if(tail&&/\d/.test(line.slice(0,tail.index))&&tail.index>3){lineDays=parseDays(tail[1]);line=line.slice(0,tail.index)}
+   else{const ev=/\b(tous les jours|chaque jour|en semaine|week-?end|du\s+\w+\s+au\s+\w+)\b/i.exec(line);if(ev&&/\d/.test(line)){lineDays=parseDays(ev[0]);line=line.replace(ev[0],' ')}}
+  }
+  cells=line.split('|').map(x=>x.trim()).filter(Boolean);
+  line=cells.join(' ').replace(/\s+/g,' ').trim();
+  const eff=lineDays||days;
+  /* Cas CSV « 05:00 | 06:00 | Sport » : deux heures isolées en cellules */
+  if(cells.length>=3&&cells.length<=5){
+   const tt=cells.map(c=>new RegExp('^'+TS+'$').exec(c));
+   if(tt[0]&&tt[1]&&okT(tt[0][1],tt[0][2])&&okT(tt[1][1],tt[1][2])){
+    const name=clean(cells.slice(2).join(' '));
+    if(name){push(name,toM(tt[0][1],tt[0][2]),toM(tt[1][1],tt[1][2]),eff);continue}
+   }
+  }
+  /* Plusieurs plages sur une même ligne (« 5h-6h Sport, 6h-6h10 Douche ») : on découpe aux virgules */
+  const nGroups=(line.match(new RegExp(TS+'\\s*-\\s*'+TS+'|'+TS,'g'))||[]).length;
+  const parts=[];
+  if(nGroups>=2){
+   const timed=c=>new RegExp(TS).test(c);
+   if(cells.length>=2&&cells.every(timed))cells.forEach(c=>parts.push(c));
+   else line.split(/\s*,\s*|\s+et\s+(?=(?:de\s+)?\d)/i).forEach(p=>{if(!p)return;if(parts.length&&!timed(p))parts[parts.length-1]+=', '+p;else parts.push(p)})
+  }
+  else parts.push(line);
+  let handled=false;
+  for(let part of parts){
+   const dd=durOf(part);part=dd.line;
+   const stripT=x=>x.replace(new RegExp('(?:jusqu\\S*\\s+|à\\s+|vers\\s+)?'+TS,'gi'),' ');
+   const r=RANGE.exec(part);
+   if(r&&okT(r[1],r[2])&&okT(r[3],r[4])){
+    const name=clean(stripT(part.slice(0,r.index)+' '+part.slice(r.index+r[0].length)));
+    const s=toM(r[1],r[2]);let e=toM(r[3],r[4]);
+    if(name)push(name,s,e,eff);else{pT.push([s,e,0]);if(lineDays)days=lineDays;flush()}
+    handled=true;continue;
+   }
+   const t=ONE.exec(part);
+   if(t&&okT(t[1],t[2])){
+    const name=clean(stripT(part));
+    if(name)push(name,toM(t[1],t[2]),null,eff,dd.dur);
+    else{pT.push([toM(t[1],t[2]),null,dd.dur]);if(lineDays)days=lineDays;flush()}
+    handled=true;continue;
+   }
+  }
+  if(handled)continue;
+  /* Ligne de texte sans heure : nom en attente si elle est courte et suivie d'une ligne d'heure ; sinon consigne ignorée */
+  if(/[a-zà-ÿ]/i.test(line)){
+   const nxt=lines.slice(li+1,li+3).some(l=>new RegExp(TS).test(l));
+   const intro=/^(voici|voila|je (?:voudrais|veux|souhaite)|peux[- ]tu|pouvez|ajoute|ajouter|cree|creer|genere|generer|mets|mettre|importe|merci|s il te plait|stp|svp|salut|bonjour|coucou|mara|hello|hey)/.test(n)||n.split(' ').length>9;
+   if(nxt&&!intro&&line.length<=70){pN.push(clean(line));if(lineDays)days=lineDays;flush()}
+  }
+ }
+ /* Heures uniques sans fin : la fin = début de l'entrée suivante du même jour (dans la limite de 3 h), sinon 30 min */
+ const byDay={};
+ rows.forEach((r,i)=>{(r.days||[-1]).forEach(d=>{(byDay[d]=byDay[d]||[]).push(i)})});
+ rows.forEach((r,i)=>{if(r.e!=null)return;let best=null;(r.days||[-1]).forEach(d=>{(byDay[d]||[]).forEach(j=>{const o=rows[j];if(j!==i&&o.s>r.s&&(best==null||o.s<best))best=o.s})});
+  r.e=best!=null&&best-r.s<=180?best:r.s+30;r.autoEnd=true});
+ rows.forEach(r=>{if(!r.days)dayless++});
+ return{rows,days:first,leftover:pT.length+pN.length,dayless};
 }
+
+/* ══════════════ IMPORT DE FICHIERS · RESTAURATION · EMPLOI DU TEMPS (v5) ══════════════ */
+const BUILD='28/09/2026 · import v5';
+const pause=ms=>new Promise(r=>setTimeout(r,ms));
+const fmtSize=n=>n>=1048576?(n/1048576).toFixed(1).replace('.',',')+' Mo':Math.max(1,Math.round(n/1024))+' Ko';
+const daysLabel=ds=>{ds=[...new Set(ds)].sort((a,b)=>((a+6)%7)-((b+6)%7));return ds.length===7?'tous les jours':(ds.length===5&&!ds.includes(0)&&!ds.includes(6))?'lun–ven':(ds.length===2&&ds.includes(0)&&ds.includes(6))?'week-end':ds.map(d=>DL[d].slice(0,3)).join(' ')};
+(()=>{const s=document.createElement('style');s.textContent='.fbar{height:10px;border-radius:99px;background:var(--s2);overflow:hidden;margin:14px 0 6px}.fbar i{display:block;height:100%;border-radius:99px;background:var(--pr);transition:width .25s ease}.fsteps{list-style:none;margin:10px 0 0;padding:0;font-size:.88rem}.fsteps li{padding:3px 0;color:var(--mu)}.fsteps li.on{color:var(--fg);font-weight:500}.fsteps li.ok{color:var(--ok)}.flist{margin:10px 0 0;padding:0 0 0 18px;font-size:.88rem;max-height:32dvh;overflow:auto}.flist li{margin:3px 0}.fchips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}.fchips button{flex:1;min-width:36px;height:38px;border-radius:12px;border:1px solid var(--bd);background:var(--el);color:var(--fg);cursor:pointer;font:inherit}.fchips button.a{background:var(--pr);color:#06101f;border-color:transparent}.imgwrap{position:sticky;top:-18px;z-index:2;background:var(--s);padding:6px 0;margin:8px 0}.imgwrap img{width:100%;max-height:30dvh;object-fit:contain;border-radius:12px;background:#000;display:block}.imgwrap.big img{max-height:70dvh}';document.head.appendChild(s)})();
+
+/* ── Stockage : jamais d'échec silencieux ── */
+function slimImages(keep){const it=[];(S.chat||[]).forEach(m=>{if(m&&m.img)it.push(m)});Object.keys(S.mood||{}).sort().forEach(k=>((S.mood[k]||{}).th||[]).forEach(m=>{if(m&&m.img)it.push(m)}));it.slice(0,Math.max(0,it.length-keep)).forEach(m=>{delete m.img});return it.length>keep}
+function shrinkDataUrl(url,max,q){return new Promise(res=>{try{const im=new Image();im.onload=()=>{try{const sc=Math.min(1,max/Math.max(im.width,im.height)),w=Math.max(1,Math.round(im.width*sc)),h=Math.max(1,Math.round(im.height*sc)),cv=document.createElement('canvas');cv.width=w;cv.height=h;const cx=cv.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,w,h);cx.drawImage(im,0,0,w,h);res(cv.toDataURL('image/jpeg',q))}catch(e){res(url)}};im.onerror=()=>res(url);im.src=url}catch(e){res(url)}})}
+const readDataUrl=f=>new Promise((ok,ko)=>{const r=new FileReader();r.onload=()=>ok(String(r.result));r.onerror=()=>ko(r.error||new Error('lecture'));r.readAsDataURL(f)});
+const readBuf=(f,onp)=>new Promise((ok,ko)=>{const r=new FileReader();r.onprogress=e=>{if(e.lengthComputable&&onp)onp(e.loaded/e.total)};r.onload=()=>ok(r.result);r.onerror=()=>ko(r.error||new Error('lecture'));r.readAsArrayBuffer(f)});
+
+/* ── Lecture d'un zip (sans bibliothèque) : .zip de sauvegarde, .docx ── */
+async function unzipEntries(buf){
+ const dv=new DataView(buf),u8=new Uint8Array(buf);let e=-1;
+ for(let i=u8.length-22;i>=Math.max(0,u8.length-66000);i--){if(dv.getUint32(i,true)===0x06054b50){e=i;break}}
+ if(e<0)throw new Error('zip');
+ const n=dv.getUint16(e+10,true);let p=dv.getUint32(e+16,true);const out=[];
+ for(let k=0;k<n;k++){if(dv.getUint32(p,true)!==0x02014b50)break;const meth=dv.getUint16(p+10,true),csz=dv.getUint32(p+20,true),usz=dv.getUint32(p+24,true),fl=dv.getUint16(p+28,true),xl=dv.getUint16(p+30,true),cl=dv.getUint16(p+32,true),lo=dv.getUint32(p+42,true);out.push({name:new TextDecoder().decode(u8.subarray(p+46,p+46+fl)),meth,csz,usz,lo});p+=46+fl+xl+cl}
+ out.read=async en=>{const lp=en.lo,lf=dv.getUint16(lp+26,true),lx=dv.getUint16(lp+28,true),st=lp+30+lf+lx,data=u8.subarray(st,st+en.csz);if(en.meth===0)return data;if(en.meth===8&&typeof DecompressionStream!=='undefined'){const ds=new DecompressionStream('deflate-raw');return new Uint8Array(await new Response(new Blob([data]).stream().pipeThrough(ds)).arrayBuffer())}throw new Error('zipmeth')};
+ return out;
+}
+function decodeText(u8){let t;try{t=new TextDecoder('utf-8',{fatal:true}).decode(u8)}catch(e){try{t=new TextDecoder('windows-1252').decode(u8)}catch(x){t=new TextDecoder('utf-8').decode(u8)}}return t.replace(/^\uFEFF/,'')}
+
+/* ── Calendrier .ics → lignes « Lundi 05h00 - 06h00 Nom » ── */
+function icsToText(txt){
+ const raw=txt.replace(/\r/g,'').replace(/\n[ \t]/g,'');const out=[];const ev=raw.split('BEGIN:VEVENT').slice(1,501);
+ const pd=v=>{const m=/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?/.exec(v||'');if(!m)return null;if(m[4]==null)return null;return m[7]?new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5])):new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5])};
+ const map={MO:1,TU:2,WE:3,TH:4,FR:5,SA:6,SU:0};
+ ev.forEach(b=>{const g=k=>{const m=new RegExp('^'+k+'[^:\\n]*:(.*)$','m').exec(b);return m?m[1].trim():''};const s=pd(g('DTSTART')),e=pd(g('DTEND')),name=g('SUMMARY').replace(/\\,/g,',').replace(/\\n/g,' ');if(!s||!name)return;
+  const by=/BYDAY=([A-Z,0-9-]+)/.exec(g('RRULE'));let days=by?by[1].split(',').map(x=>map[x.replace(/[^A-Z]/g,'')]).filter(x=>x!=null):[s.getDay()];
+  const f=d=>d.getHours()+'h'+pad(d.getMinutes());out.push(days.map(d=>DL[d]).join(', ')+' '+f(s)+(e?' - '+f(e):'')+' '+name)});
+ return out.join('\n');
+}
+
+/* ── Lecture d'une photo : détecteur de texte du navigateur s'il existe (sinon saisie guidée) ── */
+async function tryOcr(dataUrl){
+ try{if(!('TextDetector' in window))return '';const det=new window.TextDetector();const im=await new Promise((ok,ko)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=ko;i.src=dataUrl});const res=await det.detect(im);if(!res||!res.length)return '';
+  const it=res.map(r=>({t:r.rawValue||'',x:r.boundingBox.x,y:r.boundingBox.y+r.boundingBox.height/2,h:r.boundingBox.height||10})).filter(r=>r.t).sort((a,b)=>a.y-b.y);
+  const lines=[];it.forEach(r=>{const l=lines[lines.length-1];if(l&&Math.abs(l.y-r.y)<Math.max(l.h,r.h)*.6){l.p.push(r);l.y=(l.y+r.y)/2}else lines.push({y:r.y,h:r.h,p:[r]})});
+  return lines.map(l=>l.p.sort((a,b)=>a.x-b.x).map(p=>p.t).join(' ')).join('\n');
+ }catch(e){return ''}
+}
+
+/* ── Nettoyage / validation d'une sauvegarde : plus rien ne peut faire planter l'affichage ── */
+const _tm=v=>{const m=/^\s*(\d{1,2})\s*[:hH]\s*(\d{1,2})?\s*$/.exec(String(v==null?'':v));if(!m||+m[1]>23||+(m[2]||0)>59)return '';return pad(+m[1])+':'+pad(+(m[2]||0))};
+function normHabit(h,i,used){
+ if(!h||typeof h!=='object')return null;const name=String(h.name||h.nom||h.title||'').trim().slice(0,60);if(!name)return null;
+ const time=_tm(h.time)||_tm(h.heure)||_tm(h.start)||'08:00';
+ let days=Array.isArray(h.days)?[...new Set(h.days.map(Number).filter(d=>Number.isInteger(d)&&d>=0&&d<=6))]:[];if(!days.length)days=[...ALL];
+ const dayTimes={};if(h.dayTimes&&typeof h.dayTimes==='object'&&!Array.isArray(h.dayTimes))for(const[k,v]of Object.entries(h.dayTimes)){const t=_tm(v);if(t&&+k>=0&&+k<=6)dayTimes[k]=t}
+ let id=String(h.id||'');if(!id||used.has(id))id='h'+Date.now().toString(36)+i+Math.random().toString(36).slice(2,4);used.add(id);
+ const cat=CAT[h.cat]?h.cat:guessCat(name),icon=P[h.icon]?h.icon:guessIcon(cat),dur=Math.max(1,Math.min(1440,Math.round(Number(h.dur)||30)));
+ return{...h,id,name,desc:String(h.desc||'').slice(0,400),cat,icon,time,dayTimes,dur,days,alarm:h.alarm!==false,snd:typeof h.snd==='string'?h.snd:''};
+}
+function normState(d){
+ if(d&&d.data&&typeof d.data==='object'&&!Array.isArray(d.habits))d=d.data;
+ if(Array.isArray(d))d={habits:d};
+ if(!d||typeof d!=='object')throw new Error('format');
+ const isO=x=>x&&typeof x==='object'&&!Array.isArray(x);
+ const used=new Set(),habits=(Array.isArray(d.habits)?d.habits:[]).map((h,i)=>normHabit(h,i,used)).filter(Boolean);
+ const done={};if(isO(d.done))for(const[k,v]of Object.entries(d.done))if(Array.isArray(v))done[k]=v.map(String);
+ const mood={};if(isO(d.mood))for(const[k,v]of Object.entries(d.mood))if(isO(v)){mood[k]={...v,m:String(v.m||''),t:String(v.t||''),th:Array.isArray(v.th)?v.th.filter(x=>x&&typeof x==='object'&&typeof x.t==='string').map(x=>({...x,r:x.r==='u'?'u':'a'})):[]}}
+ const tasks=(Array.isArray(d.tasks)?d.tasks:[]).filter(t=>t&&typeof t==='object'&&String(t.t||'').trim()).map((t,i)=>({...t,id:String(t.id||'task-'+Date.now().toString(36)+i),t:String(t.t),c:TC[t.c]?t.c:'oublis',done:!!t.done,created:Number(t.created)||0}));
+ const reflections=(Array.isArray(d.reflections)?d.reflections:[]).filter(r=>r&&typeof r==='object'&&String(r.t||'').trim());
+ const notes=Array.isArray(d.notes)?d.notes.filter(x=>x!=null):[];
+ const chat=(Array.isArray(d.chat)?d.chat:[]).filter(m=>m&&typeof m==='object'&&typeof m.t==='string').map(m=>({...m,r:m.r==='u'?'u':'a'})).slice(-80);
+ const mara=isO(d.mara)?{...d.mara,turns:Array.isArray(d.mara.turns)?d.mara.turns.filter(x=>x&&typeof x==='object'):[],lastIdx:isO(d.mara.lastIdx)?d.mara.lastIdx:{},memory:Array.isArray(d.mara.memory)?d.mara.memory.filter(x=>x&&x.fact):[]}:undefined;
+ const o={...d,name:typeof d.name==='string'?d.name.slice(0,30):'',habits,done,mood,tasks,reflections,notes,chat,prefs:isO(d.prefs)?d.prefs:{},fired:isO(d.fired)?d.fired:{}};
+ if(mara)o.mara=mara;else delete o.mara;
+ return o;
+}
+function mergeState(cur,inc){
+ const o=JSON.parse(JSON.stringify(cur));o.habits=o.habits||[];o.tasks=o.tasks||[];o.reflections=o.reflections||[];o.done=o.done||{};o.mood=o.mood||{};
+ const sig=h=>norm(h.name)+'|'+h.time+'|'+[...h.days].sort().join(''),have=new Set(o.habits.map(sig)),ids=new Set(o.habits.map(h=>h.id));
+ inc.habits.forEach(h=>{if(have.has(sig(h)))return;let id=h.id;if(ids.has(id))id=h.id+'-'+Math.random().toString(36).slice(2,5);o.habits.push({...h,id});ids.add(id);have.add(sig(h))});
+ const tk=new Set(o.tasks.map(t=>t.t+'|'+t.c));inc.tasks.forEach(t=>{const k=t.t+'|'+t.c;if(!tk.has(k)){o.tasks.push(t);tk.add(k)}});
+ const rk=new Set(o.reflections.map(r=>(r.day||r.date||'')+'|'+r.t));inc.reflections.forEach(r=>{const k=(r.day||r.date||'')+'|'+r.t;if(!rk.has(k)){o.reflections.push(r);rk.add(k)}});
+ Object.entries(inc.done).forEach(([k,a])=>{o.done[k]=[...new Set([...(o.done[k]||[]),...a])]});
+ Object.entries(inc.mood).forEach(([k,v])=>{if(!o.mood[k])o.mood[k]=v});
+ if(!o.name&&inc.name)o.name=inc.name;
+ if(inc.mara&&inc.mara.memory&&inc.mara.memory.length){o.mara=o.mara||{turns:[],lastIt:'',lastIdx:{},lastTip:-1,memory:[]};o.mara.memory=o.mara.memory||[];inc.mara.memory.forEach(f=>{if(!o.mara.memory.some(x=>x.fact===f.fact))o.mara.memory.push(f)})}
+ return o;
+}
+const countState=d=>({habits:(d.habits||[]).length,days:Object.keys(d.done||{}).filter(k=>(d.done[k]||[]).length).length,tasks:(d.tasks||[]).length,notes:(d.reflections||[]).length+(d.notes||[]).length});
+const countLines=c=>[`• ${c.habits} habitude${c.habits>1?'s':''}`,c.days?`• ${c.days} jour${c.days>1?'s':''} de suivi (cases cochées)`:'',c.tasks?`• ${c.tasks} tâche${c.tasks>1?'s':''}`:'',c.notes?`• ${c.notes} note${c.notes>1?'s':''} / réflexion${c.notes>1?'s':''}`:''].filter(Boolean);
+
+/* ── Fenêtre d'import (barre de progression, étapes, boutons) ── */
+function fiShow(o){
+ let m=document.getElementById('fimp');if(!m){m=document.createElement('div');m.id='fimp';m.className='chat-delete-overlay';m.style.zIndex=10002;document.body.appendChild(m)}
+ m._h=o.on||{};
+ const btn=(o.buttons||[]).map(b=>`<button class="btn ${b[2]||'g'}" data-f="${b[0]}">${esc(b[1])}</button>`).join('');
+ m.innerHTML=`<section class="chat-delete-dialog reset-dialog" role="dialog" aria-modal="true" aria-live="polite" style="max-height:90dvh;overflow:auto"><span class="reset-mark" style="${o.danger?'':'background:color-mix(in srgb,var(--pr) 15%,transparent);color:var(--pr)'}">${ic(o.icon||'up')}</span><h2>${esc(o.title||'')}</h2>${o.text?`<p>${esc(o.text).replace(/\n/g,'<br>')}</p>`:''}${o.html||''}${o.pct!=null?`<div class="fbar"><i style="width:${Math.max(3,Math.min(100,o.pct))}%"></i></div><small class="mu" id="fimpl">${esc(o.label||'')}</small>`:''}${o.steps?`<ul class="fsteps">${o.steps.map((s,i)=>`<li class="${i<o.cur?'ok':i===o.cur?'on':''}">${i<o.cur?'✓':i===o.cur?'…':'○'} ${esc(s)}</li>`).join('')}</ul>`:''}<div class="chat-delete-actions">${btn}</div></section>`;
+ m.onclick=e=>{const b=e.target.closest('[data-f]');if(!b)return;const f=b.dataset.f;if(f==='close'){m.remove();return}const fn=m._h[f];if(fn)fn(b)};
+ return m;
+}
+const fiBar=(pct,label)=>{const i=document.querySelector('#fimp .fbar i'),l=document.getElementById('fimpl');if(i)i.style.width=Math.max(3,Math.min(100,pct))+'%';if(l&&label!=null)l.textContent=label};
+const fiAlive=()=>!!document.getElementById('fimp');
+
+/* ── Ajout d'un emploi du temps (sans validation ligne par ligne, avec « Annuler ») ── */
+function applyScheduleRows(rows,o){
+ o=o||{};const snap=JSON.stringify(S.habits),def=(o.defDays&&o.defDays.length)?o.defDays:[...ALL],items=[];
+ rows.forEach(r=>{const name=String(r.name||'').trim();if(!name)return;const s=Math.max(0,Math.min(1439,r.s));let dur=r.e!=null?(r.e>s?r.e-s:(r.e+1440-s)):30;if(!(dur>0))dur=30;items.push({name:name.slice(0,60),s,dur:Math.min(720,dur),days:(r.days&&r.days.length?r.days:def)})});
+ const aff=new Set();items.forEach(x=>x.days.forEach(d=>aff.add(d)));
+ if(o.replace)S.habits=S.habits.map(h=>({...h,days:h.days.filter(d=>!aff.has(d))})).filter(h=>h.days.length);
+ const g={};items.forEach(x=>{const k=norm(x.name)+'|'+x.s+'|'+x.dur;(g[k]=g[k]||{x,d:new Set()});x.days.forEach(d=>g[k].d.add(d))});
+ const added=[];let dup=0,over=0;
+ Object.values(g).forEach((v,i)=>{
+  const ex=S.habits.find(h=>norm(h.name)===norm(v.x.name)&&mins(h.time)===v.x.s);
+  if(ex){const nd=[...v.d].filter(d=>!ex.days.includes(d));if(!nd.length){dup++;return}ex.days=[...ex.days,...nd].sort();added.push({name:ex.name,s:v.x.s,dur:ex.dur,days:nd});return}
+  const cat=guessCat(v.x.name),days=[...v.d].sort((a,b)=>a-b);
+  if(days.some(d=>S.habits.some(h=>h.days.includes(d)&&mins(htime(h,d))<v.x.s+v.x.dur&&v.x.s<hend(h,d))))over++;
+  const h={id:'h'+Date.now().toString(36)+i+Math.random().toString(36).slice(2,4),name:v.x.name,desc:'',cat,icon:guessIcon(cat),time:hm2(v.x.s),dayTimes:{},dur:v.x.dur,days,alarm:true,snd:''};
+  S.habits.push(h);added.push({name:h.name,s:v.x.s,dur:h.dur,days});
+ });
+ save();try{scheduleAlarms()}catch(e){}
+ return{added,dup,over,snap,defUsed:rows.some(r=>!(r.days&&r.days.length))};
+}
+function showRecap(res,text){
+ const n=res.added.length,list=res.added.slice().sort((a,b)=>a.s-b.s),shown=list.slice(0,12).map(x=>`<li><b>${hm2(x.s)}</b> · ${esc(x.name)} <span class="mu">(${dlab(x.dur)} · ${daysLabel(x.days)})</span></li>`).join('');
+ const notes=[res.dup?`${res.dup} ligne${res.dup>1?'s':''} déjà présente${res.dup>1?'s':''} (ignorée${res.dup>1?'s':''})`:'',res.over?`${res.over} habitude${res.over>1?'s':''} chevauche${res.over>1?'nt':''} une autre : l’assistant d’organisation (✨ dans Habitudes) peut t’aider`:'',res.defUsed?'Sans jour précisé, j’ai mis « tous les jours » : modifie une habitude pour changer ça':''].filter(Boolean);
+ fiShow({icon:n?'check':'x',danger:!n,title:n?`${n} habitude${n>1?'s':''} ajoutée${n>1?'s':''}`:'Rien de nouveau à ajouter',text:n?'':'Tout ce que j’ai lu existait déjà dans ton planning.',html:(n?`<ul class="flist">${shown}${list.length>12?`<li class="mu">… et ${list.length-12} autre${list.length-12>1?'s':''}</li>`:''}</ul>`:'')+(notes.length?`<p class="mu" style="font-size:.82rem;margin:10px 0 0">${notes.map(esc).join('<br>')}</p>`:''),
+  buttons:[['go','Voir mes habitudes','' ],...(n&&text?[['edit','Vérifier / modifier les lignes','g']]:[]),...(n?[['undo','Annuler cet ajout','d']]:[]),['close','Fermer','g']],
+  on:{go(){document.getElementById('fimp')?.remove();location.hash='#habits';render()},edit(){document.getElementById('fimp')?.remove();S.habits=JSON.parse(res.snap);save();render();openImport(text)},undo(){S.habits=JSON.parse(res.snap);save();render();document.getElementById('fimp')?.remove();showInfoModal('Ajout annulé','Ton planning est revenu comme avant.',{icon:'check'})}}});
+}
+
+/* ── Import d'un fichier depuis Profil (10 Mo max) ── */
+async function openFileImport(file){
+ if(!file)return;const MAX=10*1024*1024,nm=file.name||'fichier';
+ const fail=(t,x)=>fiShow({icon:'x',danger:true,title:t,text:x,buttons:[['close','Fermer']]});
+ if(file.size>MAX){fail('Fichier trop lourd',`« ${nm} » fait ${fmtSize(file.size)}. La limite est de 10 Mo.`);return}
+ if(!file.size){fail('Fichier vide',`« ${nm} » ne contient rien.`);return}
+ fiShow({icon:'up',title:'Lecture du fichier…',text:`${nm} · ${fmtSize(file.size)}`,pct:4,label:'Ouverture…',buttons:[['close','Annuler']]});
+ let buf;try{buf=await readBuf(file,p=>fiBar(4+p*36,Math.round(p*100)+' %'))}catch(e){fail('Lecture impossible','Le fichier n’a pas pu être lu. Réessaie, ou choisis-le depuis ton dossier Téléchargements.');return}
+ if(!fiAlive())return;fiBar(42,'Analyse du contenu…');await pause(200);
+ const ext=(nm.split('.').pop()||'').toLowerCase(),ty=file.type||'',u8=new Uint8Array(buf);
+ try{
+  if(/^image\//.test(ty)||['png','jpg','jpeg','webp','gif','bmp','heic','heif'].includes(ext)){
+   fiBar(60,'Préparation de la photo…');let url=await readDataUrl(file);url=await shrinkDataUrl(url,1600,.82);if(!fiAlive())return;
+   fiBar(80,'Recherche de texte dans l’image…');const txt=await tryOcr(url);if(!fiAlive())return;document.getElementById('fimp')?.remove();
+   if(txt&&parseSchedule(txt).rows.length){textFlow(txt,url)}else openImport(txt||'',url);return}
+  if(/^audio\//.test(ty)||['mp3','wav','m4a','aac','ogg','oga','opus','caf','flac'].includes(ext)){
+   fiBar(60,'Compression du son (8 s max)…');const ok=await addSoundFile(file);if(!fiAlive())return;fiShow(ok?{icon:'check',title:'Son ajouté',text:'Il est maintenant dans « Sons d’alarme » et sélectionné par défaut.',buttons:[['close','Compris']]}:{icon:'x',danger:true,title:'Son non ajouté',text:'Fichier illisible, trop court, ou 8 sons perso déjà enregistrés.',buttons:[['close','Fermer']]});return}
+  if(ext==='pdf'||(u8[0]===0x25&&u8[1]===0x50&&u8[2]===0x44&&u8[3]===0x46)){fail('PDF non lisible hors connexion','Aube ne peut pas lire le texte d’un PDF sans internet. Ouvre-le, copie le texte de ton emploi du temps, puis colle-le à Mara. Ou fais une capture d’écran et importe l’image.');return}
+  let text='',inner='';
+  if(u8[0]===0x50&&u8[1]===0x4b&&u8[2]===3&&u8[3]===4){
+   fiBar(50,'Ouverture de l’archive…');const ents=await unzipEntries(buf);
+   const dx=ents.find(e=>e.name==='word/document.xml');
+   if(dx){const xml=decodeText(await ents.read(dx));text=xml.replace(/<\/w:p>/g,'\n').replace(/<w:tab\/>/g,'\t').replace(/<w:br\/>/g,'\n').replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'")}
+   else if(ents.find(e=>e.name==='xl/workbook.xml')){fail('Excel non lisible','Enregistre ton tableau en « CSV » (Fichier → Enregistrer sous) puis importe le .csv.');return}
+   else{const cand=ents.filter(e=>e.name&&!e.name.endsWith('/')&&!/(^|\/)(__MACOSX|\.)/.test(e.name)&&/\.(json|txt|csv|tsv|ics|md)$/i.test(e.name)&&e.usz<=20e6);
+    if(!cand.length){fail('Aucune sauvegarde dans ce zip','Je n’ai trouvé aucun fichier .json, .txt, .csv ou .ics à l’intérieur. Pour restaurer, exporte une sauvegarde depuis Profil → Données.');return}
+    cand.sort((a,b)=>(/sauvegarde|backup|aube/i.test(b.name)-/sauvegarde|backup|aube/i.test(a.name))||b.usz-a.usz);inner=cand[0].name;text=decodeText(await ents.read(cand[0]))}
+  }else{if(u8.subarray(0,4000).includes(0)){fail('Type de fichier non pris en charge','Je sais lire : sauvegardes Aube (.json, .zip), emplois du temps (.txt, .csv, .ics, .docx), photos et sons d’alarme.');return}text=decodeText(u8)}
+  if(!fiAlive())return;fiBar(55,'Vérification…');await pause(150);
+  const tr=text.trim();let js=null;
+  if(tr[0]==='{'||tr[0]==='['){try{js=JSON.parse(tr)}catch(e){}}
+  if(js){
+   const d=(js&&js.data&&typeof js.data==='object'&&!Array.isArray(js.habits))?js.data:js;
+   const ok=Array.isArray(d)?d.length&&d.every(x=>x&&typeof x==='object'&&(x.name||x.nom||x.title)):(d&&typeof d==='object'&&(Array.isArray(d.habits)||Array.isArray(d.tasks)||Array.isArray(d.reflections)||d.done||d.mood));
+   if(ok){const inc=normState(d);restoreFlow(inc,nm,inner,file.size);return}
+  }
+  if(/BEGIN:VCALENDAR/.test(text))text=icsToText(text);
+  if(parseSchedule(text).rows.length){document.getElementById('fimp')?.remove();textFlow(text,null);return}
+  fail('Je n’ai rien reconnu dedans','Ce fichier n’est ni une sauvegarde Aube, ni un emploi du temps avec des horaires (ex. « 05h00 – 06h00 Séance de sport »). Vérifie le fichier ou colle son texte directement à Mara.');
+ }catch(e){fail('Import impossible','Une erreur est survenue en lisant « '+nm+' ». Vérifie que le fichier n’est pas abîmé, puis réessaie.')}
+}
+async function addSoundFile(f){
+ try{if(f.size>6e6||CS.length>=8)return false;const blob=await transcodeAlarm(f),id='c'+Date.now(),name=f.name.replace(/\.[^.]+$/,'')||'Mon son';await idbDo('readwrite',s=>s.put({id,name,blob}));CS.push({id,name,blob});delete decodedBuf[id];S.prefs.snd=id;save();render();return true}catch(e){return false}
+}
+
+/* ── Emploi du temps trouvé dans un fichier / une photo ── */
+function textFlow(text,img){
+ const p=parseSchedule(text),st={chips:new Set(),rep:false},need=p.dayless>0;
+ const draw=()=>{const list=p.rows.slice(0,8).map(r=>`<li><b>${hm2(r.s)}</b> · ${esc(r.name)} <span class="mu">(${dlab((r.e>r.s?r.e-r.s:30))}${r.days?' · '+daysLabel(r.days):''})</span></li>`).join('');
+  fiShow({icon:'cal',title:`${p.rows.length} activité${p.rows.length>1?'s':''} trouvée${p.rows.length>1?'s':''}`,text:need?'Certaines lignes n’ont pas de jour. Choisis les jours à leur appliquer :':'',
+   html:(need?`<div class="fchips">${[1,2,3,4,5,6,0].map(d=>`<button data-f="d${d}" class="${st.chips.has(d)?'a':''}">${DAYS[d]}</button>`).join('')}</div>`:'')+`<ul class="flist">${list}${p.rows.length>8?`<li class="mu">… et ${p.rows.length-8} autres</li>`:''}</ul>`,
+   buttons:[['add',need&&!st.chips.size?'Ajouter (tous les jours)':'Ajouter à mes habitudes',''],['edit','Vérifier / modifier d’abord','g'],['close','Annuler','d']],
+   on:{...Object.fromEntries([0,1,2,3,4,5,6].map(d=>['d'+d,()=>{st.chips.has(d)?st.chips.delete(d):st.chips.add(d);draw()}])),
+    add(){const res=applyScheduleRows(p.rows,{defDays:[...st.chips],replace:false});render();showRecap(res,text)},edit(){document.getElementById('fimp')?.remove();openImport(text,img)}}})};
+ draw();
+}
+
+/* ── Restauration d'une sauvegarde : confirmation → barre de progression → résumé ── */
+function restoreFlow(inc,nm,inner,size){
+ const c=countState(inc);
+ if(!c.habits&&!c.tasks&&!c.notes&&!c.days){fiShow({icon:'x',danger:true,title:'Sauvegarde vide',text:'Ce fichier ne contient ni habitudes, ni tâches, ni notes.',buttons:[['close','Fermer']]});return}
+ fiShow({icon:'up',title:'Sauvegarde détectée',text:`${nm}${inner?' → '+inner:''} · ${fmtSize(size)}\n\n${countLines(c).join('\n')}\n\nQue veux-tu faire ?`,
+  buttons:[['rep','Remplacer mes données par celles-ci',''],['mer','Fusionner avec ce que j’ai déjà','g'],['close','Annuler','d']],
+  on:{rep(){runRestore(inc,'replace',nm)},mer(){runRestore(inc,'merge',nm)}}});
+}
+async function runRestore(inc,mode,nm){
+ const steps=['Vérification du fichier','Reconstruction des habitudes et du suivi','Optimisation des images','Enregistrement sur l’appareil','Actualisation de l’application'];
+ const show=(cur,pct,label)=>fiShow({icon:'up',title:'Restauration en cours…',text:nm,pct,label,steps,cur,buttons:[]});
+ let prevStr='';try{prevStr=JSON.stringify(S)}catch(e){}
+ try{
+  show(0,8,'Vérification…');await pause(350);
+  show(1,30,'Reconstruction…');await pause(350);
+  let next=mode==='merge'?mergeState(S,inc):{...inc,prefs:{...(S.prefs||{}),...(inc.prefs||{})}};
+  if(!next.habits.length&&mode==='replace')next.habits=S.habits;
+  next.mood=next.mood||{};next.done=next.done||{};next.reflections=next.reflections||[];next.tasks=next.tasks||[];
+  show(2,52,'Images…');await pause(150);
+  const imgs=[];[...(next.chat||[])].forEach(m=>{if(m&&m.img&&m.img.length>300000)imgs.push(m)});Object.values(next.mood).forEach(v=>(v.th||[]).forEach(m=>{if(m&&m.img&&m.img.length>300000)imgs.push(m)}));
+  for(let i=0;i<imgs.length;i++){imgs[i].img=await shrinkDataUrl(imgs[i].img,1000,.7);fiBar(52+18*(i+1)/imgs.length,`Image ${i+1} / ${imgs.length}`)}
+  show(3,78,'Écriture…');await pause(300);
+  try{localStorage.setItem(K+'.avant-import',prevStr)}catch(e){}
+  S=next;S.reflections=Array.isArray(S.reflections)?S.reflections:[];S.tasks=Array.isArray(S.tasks)?S.tasks:[];S.prefs=S.prefs||{};
+  let saved=true;
+  try{localStorage.setItem(K,JSON.stringify(S))}catch(e){saved=false}
+  if(!saved){for(const keep of[3,1,0]){slimImages(keep);try{localStorage.setItem(K,JSON.stringify(S));saved=true;break}catch(e){}}}
+  let verified=false;try{const back=JSON.parse(localStorage.getItem(K)||'null');verified=!!back&&back.habits.length===S.habits.length}catch(e){}
+  show(4,94,'Actualisation…');await pause(300);
+  try{scheduleAlarms()}catch(e){}
+  render();fiBar(100,'Terminé');await pause(250);
+  const c=countState(S);
+  fiShow({icon:'check',title:'Restauration terminée ✓',text:(saved&&verified?'Tout est enregistré sur cet appareil et affiché dans l’app :':'Les données sont affichées mais l’espace de stockage est presque plein — fais une sauvegarde (Exporter) dès maintenant :')+'\n\n'+countLines(c).join('\n'),
+   buttons:[['go','Voir mes habitudes',''],['undo','Annuler la restauration','g'],['close','Fermer','g']],
+   on:{go(){document.getElementById('fimp')?.remove();location.hash='#habits';render()},undo(){try{const b=JSON.parse(prevStr);if(b&&Array.isArray(b.habits)){S=b;save();render();document.getElementById('fimp')?.remove();showInfoModal('Restauration annulée','Tes données d’avant l’import ont été rétablies.',{icon:'check'})}}catch(e){}}}});
+ }catch(e){
+  try{const b=JSON.parse(prevStr);if(b&&Array.isArray(b.habits)){S=b}}catch(x){}
+  try{render()}catch(x){}
+  fiShow({icon:'x',danger:true,title:'La restauration a échoué',text:'Une erreur est survenue. Tes données actuelles ont été conservées telles quelles.',buttons:[['close','Fermer']]});
+ }
+}
+
+/* ── Envoi d'un message à Mara : emploi du temps collé → habitudes créées automatiquement ── */
+async function maraSchedule(text,img,id){
+ let src=text,p=null,ocr=false;
+ if(img){const o=await tryOcr(img);if(o){src=(text?text+'\n':'')+o;ocr=true}}
+ try{p=src?parseSchedule(src):{rows:[],dayless:0}}catch(e){p={rows:[],dayless:0}}
+ const t=norm(src||''),kw=has(t,'emploi du temps','emploi de temps','edt','horaires','planning','agenda','importe','habitudes','programme','routine','semaine'),multi=/\n/.test(src)||src.length>160;
+ const isSched=p.rows.length>=3||(p.rows.length>=2&&(kw||multi))||(p.rows.length>=1&&kw&&multi);
+ if(isSched){
+  const replace=/\b(remplace|remplacer|efface|effacer|supprime tout|repars? de zero|nouveau planning|a la place)\b/.test(t);
+  const res=applyScheduleRows(p.rows,{defDays:[],replace});
+  const n=res.added.length;
+  const reply=n?`C’est fait${N()} : j’ai lu ${p.rows.length} ligne${p.rows.length>1?'s':''} d’horaires et créé ${n} habitude${n>1?'s':''}${ocr?' (texte lu dans ta photo)':''}. ${res.defUsed?'Aucun jour n’était précisé pour certaines : je les ai mises tous les jours. ':''}Tu les retrouves dans Habitudes, et tu peux annuler ou vérifier dans la fenêtre qui s’ouvre.`:`J’ai bien lu ${p.rows.length} ligne${p.rows.length>1?'s':''} d’horaires${N()}, mais elles existent déjà dans ton planning : je n’ai rien ajouté en double.`;
+  return{reply,after:()=>{render();showRecap(res,src)}};
+ }
+ if(img&&(!text||kw)){
+  return{reply:`J’ai bien reçu ta photo${N()}. Sans internet, je n’ai pas de lecteur d’image dans ce navigateur : je ne peux donc pas déchiffrer le texte toute seule. Je t’ouvre la photo à côté d’une saisie rapide : tu tapes les lignes en la regardant et je crée les habitudes. Astuce : dans ta galerie, « Copier le texte de l’image » (Google Lens) puis colle-le ici, et je fais tout en un coup.`,after:()=>openImport(text||'',img)};
+ }
+ if(!img&&p.rows.length===0&&kw&&/(ajout|import|colle|renseign|donner|envoy|enregistr|cree|genere|mettre|mets)/.test(t)&&src.length<120){
+  return{reply:`Avec plaisir${N()} ! Colle ton emploi du temps dans la fenêtre qui s’ouvre (ou directement ici, en entier, sans limite de longueur). Je reconnais « 05h00 – 06h00 Séance de sport », les jours (Lundi…), les tableaux, les listes, « du lundi au vendredi »… et je crée les habitudes.`,after:()=>openImport('',null)};
+ }
+ return null;
+}
+
 let impState=null;
 function openImport(text,img){
  document.getElementById('imp-overlay')?.remove();
@@ -928,9 +1300,11 @@ function openImport(text,img){
   for(const d of ds){if(!st.rep){const h=S.habits.find(h=>h.days.includes(d)&&mins(htime(h,d))<r.e&&r.s<hend(h,d));if(h)return`Chevauche « ${h.name} » (${DL[d]})`}
    const o=st.rows.findIndex((x,j)=>j!==i&&x.on&&x.e!=null&&dl(x).includes(d)&&x.s<r.e&&r.s<x.e);if(o>=0)return`Chevauche la ligne ${o+1}`}return''};
  const recalc=()=>{let bad=0;st.rows.forEach((r,i)=>{const c=clash(r,i);if(c)bad++;const el=m.querySelector(`[data-b="${i}"]`);if(el)el.textContent=c?'⚠ '+c:''});const n=st.rows.filter(r=>r.on).length,b=m.querySelector('#impSave');if(b){b.disabled=!n||bad>0;b.style.opacity=b.disabled?.5:1;b.textContent=bad?`Corrige ${bad} ligne${bad>1?'s':''} en rouge`:`Ajouter ${n} habitude${n>1?'s':''}`}};
- const draw=()=>{m.innerHTML=`<section class="card" style="width:min(100%,460px);max-height:92dvh;overflow:auto;padding:18px;margin:0"><p class="cap">Import</p><h2 style="margin:0">Ajouter un emploi du temps</h2>${img?`<img src="${img}" alt="" style="width:100%;max-height:170px;object-fit:contain;border-radius:12px;margin-top:10px;background:#000">`:''}<p class="mu" style="font-size:.8rem;margin:8px 0">Hors connexion, je ne lis pas les images toute seule. Ouvre l’image dans Google Lens (ou « Copier le texte » dans ta galerie), colle le texte ici : je le range et tu vérifies chaque ligne avant d’enregistrer.</p><textarea id="impT" placeholder="05h00 – 06h00 Séance de sport&#10;06h00 – 06h10 Douche" style="min-height:90px">${esc(st.text||'')}</textarea><button class="btn g" id="impGo">Analyser</button>${st.rows.length?`<div class="days" style="margin-top:12px">${[1,2,3,4,5,6,0].map(d=>`<button data-d="${d}" class="${st.chips.has(d)?'a':''}">${DAYS[d]}</button>`).join('')}</div><small class="mu">Jours appliqués aux lignes sans jour précis.</small>${st.rows.map((r,i)=>`<div style="border:1px solid var(--bd);border-radius:14px;padding:8px;margin-top:8px"><div style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-o="${i}" ${r.on?'checked':''} style="width:20px;height:20px;margin:0;flex:none"><input data-n="${i}" value="${esc(r.name)}" maxlength="60" style="margin:0"></div><div style="display:flex;gap:8px;margin-top:6px"><input type="time" data-s="${i}" value="${hm2(r.s)}" style="margin:0"><input type="time" data-e="${i}" value="${r.e==null?'':hm2(r.e)}" style="margin:0"></div><small data-b="${i}" style="color:var(--dg);display:block;margin-top:4px"></small></div>`).join('')}${st.leftover?`<p class="mu" style="font-size:.8rem;margin-top:8px">${st.leftover} ligne(s) non appariée(s) ignorée(s).</p>`:''}<label class="tg" style="font-size:.85rem"><span>Remplacer mon planning existant sur ces jours</span><input type="checkbox" class="sw" id="impRep" ${st.rep?'checked':''}></label>`:''}<button class="btn" id="impSave" ${st.rows.length?'':'disabled style="opacity:.5"'}>Ajouter</button><button class="btn g" id="impNo">Fermer</button></section>`;recalc()};
+ const draw=()=>{m.innerHTML=`<section class="card" style="width:min(100%,460px);max-height:92dvh;overflow:auto;padding:18px;margin:0"><p class="cap">Import</p><h2 style="margin:0">Ajouter un emploi du temps</h2>${img?`<div class="imgwrap" id="impImgW"><img id="impImg" src="${img}" alt="Ton emploi du temps" title="Touche pour agrandir"></div>`:''}<p class="mu" style="font-size:.82rem;margin:8px 0">${img?'Sans internet, je ne peux pas déchiffrer une image toute seule. Regarde ta photo (touche-la pour l’agrandir) et tape les lignes avec « + Ajouter une ligne », ou colle ci-dessous le texte copié depuis Google Lens / « Copier le texte de l’image ».':'Colle ton emploi du temps ici, aussi long que tu veux : jours, heures, tableaux, listes… je range tout et tu peux vérifier chaque ligne avant d’enregistrer.'}</p><textarea id="impT" placeholder="05h00 – 06h00 Séance de sport&#10;06h00 – 06h10 Douche" style="min-height:90px">${esc(st.text||'')}</textarea><button class="btn g" id="impGo">Analyser le texte collé</button><button class="btn g" id="impAdd">+ Ajouter une ligne à la main</button>${(st.rows.length||st.manual)?`<div class="days" style="margin-top:12px">${[1,2,3,4,5,6,0].map(d=>`<button data-d="${d}" class="${st.chips.has(d)?'a':''}">${DAYS[d]}</button>`).join('')}</div><small class="mu">Jours appliqués aux lignes sans jour précis.</small>${st.rows.map((r,i)=>`<div style="border:1px solid var(--bd);border-radius:14px;padding:8px;margin-top:8px"><div style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-o="${i}" ${r.on?'checked':''} style="width:20px;height:20px;margin:0;flex:none"><input data-n="${i}" value="${esc(r.name)}" maxlength="60" style="margin:0"></div><div style="display:flex;gap:8px;margin-top:6px"><input type="time" data-s="${i}" value="${hm2(r.s)}" style="margin:0"><input type="time" data-e="${i}" value="${r.e==null?'':hm2(r.e)}" style="margin:0"></div><small data-b="${i}" style="color:var(--dg);display:block;margin-top:4px"></small></div>`).join('')}${st.leftover?`<p class="mu" style="font-size:.8rem;margin-top:8px">${st.leftover} ligne(s) non appariée(s) ignorée(s).</p>`:''}<label class="tg" style="font-size:.85rem"><span>Remplacer mon planning existant sur ces jours</span><input type="checkbox" class="sw" id="impRep" ${st.rep?'checked':''}></label>`:''}<button class="btn" id="impSave" ${st.rows.length?'':'disabled style="opacity:.5"'}>Ajouter</button><button class="btn g" id="impNo">Fermer</button></section>`;recalc()};
  m.onclick=e=>{const t=e.target;if(t===m||t.id==='impNo'){m.remove();return}
   if(t.id==='impGo'){st.text=m.querySelector('#impT').value;const p=parseSchedule(st.text);st.rows=p.rows.map(r=>({...r,on:true}));st.leftover=p.leftover;st.chips=new Set(p.days||[]);if(!st.rows.length)alert('Je n’ai trouvé aucune ligne « heure + activité ». Vérifie le texte collé.');draw();return}
+  if(t.id==='impImg'){m.querySelector('#impImgW').classList.toggle('big');return}
+  if(t.id==='impAdd'){const ta=m.querySelector('#impT');if(ta)st.text=ta.value;st.manual=true;st.rows.push({name:'',s:480,e:540,days:null,on:true});draw();const ins=m.querySelectorAll('[data-n]');const l=ins[ins.length-1];if(l){l.scrollIntoView({block:'center'});l.focus()}return}
   if(t.dataset.d!==undefined){const d=+t.dataset.d;st.chips.has(d)?st.chips.delete(d):st.chips.add(d);draw();return}
   if(t.id==='impRep'){st.rep=t.checked;recalc();return}
   if(t.dataset.o!==undefined){st.rows[+t.dataset.o].on=t.checked;recalc();return}
@@ -1265,12 +1639,12 @@ document.addEventListener('input',e=>{const t=e.target;if(t.dataset.in&&dr){dr[t
 document.addEventListener('change',async e=>{const t=e.target,a=t.dataset.a;if(!a)return;
 if(a==='taskToggle'){A.taskToggle(t);return}
 if(a==='reflectionNotify'){if(t.checked){try{if(!('Notification'in window)){throw new Error('no-notification')}if(Notification.permission==='denied'){t.checked=false;showInfoModal('Notifications bloquées','Tu as déjà refusé les notifications pour Aube dans ton navigateur. Pour activer ce rappel, autorise-les depuis les réglages du site (l’icône ⓘ ou 🔒 à côté de l’adresse), puis reviens ici.',{danger:true,icon:'bell'});return}if(Notification.permission==='default')await Notification.requestPermission()}catch(x){}if(!('Notification'in window)||Notification.permission!=='granted'){t.checked=false;showInfoModal('Notifications indisponibles','Ton navigateur n’a pas autorisé les notifications ici. Réessaie depuis les réglages du site, ou vérifie que ton navigateur les prend en charge.',{danger:true,icon:'bell'});return}}S.prefs.reflectionNotify=t.checked;save();render();return}
-if(a==='pn'){unlockAudio();if(t.checked){try{if(Notification.permission==='default')await Notification.requestPermission()}catch(x){}}S.prefs.notif=t.checked;keepAliveAudio(t.checked);holdWake(t.checked);scheduleAlarms()}
+if(a==='pn'){unlockAudio();if(t.checked){if(!('Notification'in window)||!window.isSecureContext){t.checked=false;S.prefs.notif=false;save();render();showInfoModal('Notifications non prises en charge','Les notifications nécessitent une version installée ou un site sécurisé (HTTPS) dans un navigateur compatible. Ouvre Aube depuis son adresse HTTPS dans Chrome, puis installe-la et réessaie.',{danger:true,icon:'bell'});return}try{if(Notification.permission==='default'){const permission=await Notification.requestPermission();if(permission!=='granted'){t.checked=false;S.prefs.notif=false;save();render();showInfoModal('Autorisation refusée','Autorise les notifications dans les réglages du site, puis réessaie.',{danger:true,icon:'bell'});return}}}catch(x){t.checked=false;S.prefs.notif=false;save();render();showInfoModal('Notifications indisponibles','Ce navigateur ou son mode intégré ne permet pas de demander les notifications. Ouvre Aube dans Chrome depuis son adresse HTTPS.',{danger:true,icon:'bell'});return}}S.prefs.notif=t.checked;keepAliveAudio(t.checked);holdWake(t.checked);scheduleAlarms()}
 else if(a==='psn')S.prefs.snooze=+t.value;else if(a==='pvol'){render();return}
 else if(a==='ff'||a==='fa'||a==='fs'){A[a](t);return}
 else if(a==='ai'){A.ai(t);return}
 else if(a==='as'&&t.files[0]){const f=t.files[0];if(f.size>6e6){alert('Fichier trop lourd (6 Mo max).');return}if(CS.length>=8){alert('Espace limité : 8 sons perso max. Supprime-en un d’abord.');return}try{const blob=await transcodeAlarm(f);const id='c'+Date.now();const name=f.name.replace(/\.[^.]+$/,'')||'Mon son';await idbDo('readwrite',s=>s.put({id,name,blob}));CS.push({id,name,blob});delete decodedBuf[id];S.prefs.snd=id;save();render();pl=id;play(id,false)}catch(x){alert(x&&x.message==='court'?'Ce son est trop court.':'Impossible de lire ce fichier. Essaie un MP3, WAV, M4A ou AAC.')}return}
-else if(a==='imp'&&t.files[0]){const r=new FileReader();r.onload=()=>{try{let raw=String(r.result||'').replace(/^\uFEFF/,'').trim();const d=JSON.parse(raw);if(!d||typeof d!=='object'||!Array.isArray(d.habits))throw 0;d.reflections=Array.isArray(d.reflections)?d.reflections:[];d.tasks=Array.isArray(d.tasks)?d.tasks:[];d.done=d.done&&typeof d.done==='object'?d.done:{};d.mood=d.mood&&typeof d.mood==='object'?d.mood:{};d.prefs=d.prefs&&typeof d.prefs==='object'?d.prefs:{};d.fired=d.fired&&typeof d.fired==='object'?d.fired:{};if(typeof d.name!=='string')d.name='';S=d;save();render();showInfoModal('Sauvegarde importée','Tes données ont bien été restaurées sur cet appareil.',{icon:'check'})}catch(x){showInfoModal('Fichier invalide','Ce fichier ne semble pas être une sauvegarde Aube valide. Vérifie que tu choisis bien un fichier .json exporté depuis Aube (bouton « Exporter une sauvegarde »), puis réessaie.',{danger:true,icon:'x'})}};r.onerror=()=>showInfoModal('Lecture impossible','Le fichier n’a pas pu être lu. Réessaie, ou choisis-le depuis ton dossier Téléchargements.',{danger:true,icon:'x'});r.readAsText(t.files[0]);return}
+else if((a==='imp'||a==='impf')&&t.files[0]){const f=t.files[0];try{t.value=''}catch(x){}openFileImport(f);return}
 save();render()});
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)&&e.target.dataset&&e.target.dataset.enter){e.preventDefault();A.cs({dataset:{id:e.target.dataset.enter}})}});
 addEventListener('beforeinstallprompt',e=>{e.preventDefault();window.dip=e;render()});addEventListener('appinstalled',()=>{window.dip=null;render()});

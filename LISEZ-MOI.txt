@@ -1,16 +1,57 @@
-AUBE — VERSION CORRIGÉE
+MISE À JOUR TÂCHES : Accueil → « Mes tâches » sert seulement à ajouter (logo courses / ménage / cuisine / idées / oublis + « Ajouter »). La tâche est rangée dans Mes tâches (icône livre), sans barre d'ajout, en cartes façon Habitudes avec coche ronde. Les cartes ne rejouent plus leur fondu quand on reste sur la même page.
 
-Aperçu local : ouvrez Aube-apercu.html dans un navigateur récent.
-Déploiement Netlify : déposez le contenu de ce dossier (index.html, app.js, sw.js, manifest.webmanifest et icônes) dans le dossier de publication.
+AUBE — MISE À JOUR (humeur/tâches en carte retournable, import corrigé, Mara refondue)
 
-Modifications :
-- Confirmation de réinitialisation dans une fenêtre intégrée, stylisée et lisible.
-- Accueil : accès Mara et Mes notes en haut; suppression des doublons dans la barre d’humeur.
-- Retrait du texte « Voici ton programme d’aujourd’hui » de l’accueil.
-- Chat Mara en zone de texte multiligne : Entrée ajoute une ligne, Ctrl+Entrée/⌘+Entrée envoie.
-- Export de l’emploi du temps en image : généré localement depuis les données affichées, sans service externe.
+Aperçu local : ouvre Aube-apercu.html dans un navigateur récent.
+Déploiement Netlify : dépose tout le contenu de ce dossier (index.html, app.js, sw.js,
+manifest.webmanifest, icônes) dans le dossier de publication.
+Fais une sauvegarde depuis Profil → Données AVANT de remplacer une version utilisée.
 
-Les données restent dans le navigateur. Fais une sauvegarde depuis Profil → Données avant de remplacer une version utilisée.
+CE QUI A CHANGÉ
 
+1) Carte « Humeur / Tâches » façon pages d'un carnet
+   - Un sélecteur en haut de la carte : « Mon humeur » | « Mes tâches (n) ».
+   - Toucher l'un retourne la carte (animation de page qui tourne) au lieu d'empiler
+     deux blocs. La face choisie est mémorisée.
+   - Le stockage reste séparé en deux : l'humeur/objectif d'un côté, les tâches de l'autre.
 
-Mise à jour : affichage des heures après minuit sur 00:xx, ajout d'une liste de petites tâches dans la carte d'humeur et rappels aléatoires de notes/tâches en attente. Les notifications de rappel dépendent des autorisations et du maintien d'une activité de l'application/navigateur; le déclenchement garanti écran éteint n'est pas assuré sur tous les appareils.
+2) Import de sauvegarde corrigé
+   - Le sélecteur de fichier n'acceptait que le type « application/json », ce que beaucoup
+     de téléphones Android ne reconnaissent pas pour un fichier téléchargé : le fichier
+     exporté par Aube apparaissait grisé. Il accepte maintenant .json et texte.
+   - L'import tolère aussi un fichier avec caractère invisible en début (BOM), et les
+     anciennes sauvegardes auxquelles il manque des champs récents (tâches, notes…).
+   - Les messages « importé » / « fichier invalide » sont dans une fenêtre aux couleurs de l'app.
+
+3) Plus de clignotement sur les émoticônes
+   - Toucher une émoticône (ou ajouter/cocher/supprimer une tâche) ne reconstruit plus toute
+     la page : seule la carte concernée est mise à jour, sans rejouer l'animation d'apparition.
+
+4) Rappels aléatoires (Profil)
+   - Les messages d'erreur (notifications refusées/indisponibles) utilisent la même fenêtre
+     stylisée que le reste de l'app, avec une explication claire.
+   - Limite technique : la fenêtre « Autoriser les notifications ? » elle-même est dessinée
+     par le navigateur/Android, aucune application web ne peut la restyler.
+
+5) Mara — moteur hors ligne refondu (aucun appel réseau)
+   - « Qu'est-ce qu'on fait aujourd'hui ? » donne enfin le programme du jour avec les vraies
+     heures. « Je fais quoi maintenant / là ? » donne uniquement l'activité en cours.
+     Idem pour demain, après-demain, hier, un jour nommé, ce matin / cet après-midi / ce soir.
+   - Comprend : prochaine activité, temps restant avant/pendant une activité, créneaux libres
+     (avec durée), durée ou heure de début d'une activité, tâches restantes, résumé de semaine,
+     « est-ce que j'ai X lundi ? », l'heure et la date.
+   - Actions en langage naturel : ajouter (avec heure par défaut si tu dis « le matin »,
+     « le soir »…), décaler (« décale le piano de 20 min », « mets-le à 19h »), supprimer,
+     cocher / décocher, retenir / oublier une information, « que sais-tu sur moi ? ».
+   - Vocabulaire fortement élargi : argot, abréviations, fautes de frappe, et de nombreuses
+     intentions : fatigue, stress, tristesse, solitude, colère, peur, motivation, honte, joie,
+     ennui, maladie, sommeil, conflit, examen, salutations/au revoir (avec ton premier créneau
+     de demain), blagues, encouragements, compliments, critiques, incompréhension, excuses…
+   - Deux bugs cachés corrigés : la tolérance aux fautes de frappe confondait « peux » avec
+     « peur » et « heure » avec « heureux » (réponses émotionnelles hors sujet), et certaines
+     commandes ne marchaient qu'avec des mots sans accent.
+   - La détection de crise (3114 / 112) reste strictement prioritaire.
+
+LIMITE HONNÊTE : Mara est un moteur à règles très large, pas un grand modèle de langage.
+Une tournure vraiment inhabituelle peut encore la surprendre ; elle le dit alors et propose
+de reformuler plutôt que d'inventer.

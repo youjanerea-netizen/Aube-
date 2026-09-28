@@ -79,6 +79,21 @@ nav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color
 .mood-strip button{border:1px solid var(--bd);background:var(--el);color:var(--fg);border-radius:16px;padding:10px 2px;font-size:1.2rem;cursor:pointer}
 .mood-strip button span{display:block;font-size:.6rem;color:var(--mu);margin-top:3px;letter-spacing:0}
 .mood-strip button.a{background:color-mix(in srgb,var(--pr) 18%,transparent);border-color:var(--pr)}
+/* Carte humeur/tâches en flip, comme deux pages d’un même carnet : on choisit
+   la face avec le petit sélecteur du haut, et la carte se retourne au lieu
+   d’empiler les deux blocs l’un sous l’autre. */
+.flip-card{overflow:hidden;perspective:1400px}
+.flip-seg{display:flex;gap:6px;margin-bottom:14px}
+.flip-seg button{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;height:38px;border-radius:14px;border:1px solid var(--bd);background:var(--el);color:var(--mu);font:500 .8rem Outfit,system-ui;cursor:pointer;padding:0 4px}
+.flip-seg button svg{width:15px;height:15px;flex:none}
+.flip-seg button.a{background:color-mix(in srgb,var(--pr) 18%,transparent);border-color:var(--pr);color:var(--fg)}
+.flip-inner{position:relative;transition:transform .55s cubic-bezier(.4,.15,.2,1);transform-style:preserve-3d}
+.flip-inner.flipped{transform:rotateY(180deg)}
+.flip-face{backface-visibility:hidden;-webkit-backface-visibility:hidden}
+.flip-face.flip-back{position:absolute;inset:0;transform:rotateY(180deg);overflow:auto}
+.flip-inner:not(.flipped) .flip-back{pointer-events:none}
+.flip-inner.flipped .flip-front{pointer-events:none}
+@media(prefers-reduced-motion:reduce){.flip-inner{transition:none!important}}
 .chat-tools{display:flex;gap:7px;margin-top:8px}.chat-tools label{flex:1;display:block}
 .chat-tools button{width:100%;height:40px;border:1px solid var(--bd);background:var(--el);color:var(--fg);border-radius:13px;font:inherit;font-size:.78rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}.chat-tools button svg{width:15px;height:15px}
 .chat-tools button.rec{color:var(--dg);border-color:var(--dg)}
@@ -113,7 +128,7 @@ body.chat-keyboard .mara-screen .mara-breathe{display:none}
 .timetable-card{padding:14px 12px}.timetable-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}.timetable-columns{display:grid;grid-template-columns:64px minmax(0,1fr);gap:9px;padding:0 2px 7px;color:var(--mu);font-size:.72rem;text-transform:uppercase;letter-spacing:.08em}.timetable-list{display:grid;gap:9px}.timetable-row{display:grid;grid-template-columns:64px minmax(0,1fr);gap:9px;align-items:stretch}.timetable-time{display:flex;flex-direction:column;justify-content:center;color:var(--fg);font-size:.83rem;font-weight:600}.timetable-time small{font-size:.72rem;color:var(--mu);font-weight:400}.timetable-bar{display:flex;gap:10px;align-items:center;min-width:0;border:1px solid var(--bd);border-left:4px solid var(--c);background:var(--el);border-radius:13px;padding:11px 10px}.timetable-bar>span{width:34px;height:34px;display:grid;place-items:center;border-radius:11px;background:color-mix(in srgb,var(--c) 18%,transparent);color:var(--c);flex:none}.timetable-bar>div{min-width:0;display:flex;flex-direction:column}.timetable-bar b{font-size:.88rem;overflow-wrap:anywhere}.timetable-bar small{font-size:.74rem;color:var(--mu);margin-top:2px;overflow-wrap:anywhere}.timetable-head .btn{font-size:.78rem;white-space:nowrap}.timetable-card .empty{padding:24px 8px}
 
 .cin{display:flex;align-items:flex-end;gap:10px}.cin textarea{flex:1;min-width:0;min-height:56px;max-height:180px;resize:vertical;margin:0;line-height:1.45;white-space:pre-wrap;overflow-y:auto}.cin .fab{flex:none;width:52px;height:52px}.mara-screen .cin textarea{font-size:16px}.reset-dialog{text-align:left}.reset-dialog .reset-mark{display:grid;place-items:center;width:46px;height:46px;border-radius:15px;background:color-mix(in srgb,var(--dg) 15%,transparent);color:var(--dg);margin-bottom:14px}.reset-dialog h2{font-size:1.35rem}.reset-dialog .chat-delete-actions{display:grid;gap:8px;margin-top:18px}.reset-dialog .btn{margin:0}
-</style>
+#v.norise .rise,#v.norise .hc,#v.norise .bu,#v.norise .out .ck{animation:none!important}.tcat button svg{color:var(--c)}.tk{max-height:none}.tk .mt{cursor:default}.tk .mt b{white-space:normal;overflow-wrap:anywhere}.tk .tx{background:none;border:0;color:var(--mu);width:34px;height:40px;display:grid;place-items:center;padding:0;cursor:pointer;flex:none}.hc{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}</style>
 </head>
 <body>
 <main id="v"></main>

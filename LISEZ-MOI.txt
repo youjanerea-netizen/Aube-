@@ -102,3 +102,9 @@ CE QUI A CHANGÉ
 LIMITE HONNÊTE : Mara est un moteur à règles très large, pas un grand modèle de langage.
 Une tournure vraiment inhabituelle peut encore la surprendre ; elle le dit alors et propose
 de reformuler plutôt que d'inventer.
+
+
+CORRECTION IMPORT ANDROID — version corrective
+- Le champ d’import accepte explicitement tous les types de fichiers.
+- Le traitement de sélection est centralisé et dispose d’un rattrapage au retour du sélecteur Android si l’événement change n’est pas remonté immédiatement.
+- Les fichiers restent limités à 10 Mo et sont analysés selon leur contenu reconnu.

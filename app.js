@@ -46,7 +46,7 @@ let saveWarned=false;
 const persist=()=>{try{localStorage.setItem(K,JSON.stringify(S));return true}catch(e){return false}};
 const save=()=>{if(!persist()){for(const k of[3,1,0]){slimImages(k);if(persist())break}if(!persist()&&!saveWarned){saveWarned=true;setTimeout(()=>{try{showInfoModal('Espace de stockage plein','Aube n’arrive plus à enregistrer sur cet appareil. Fais une sauvegarde (Profil → Données → Exporter), puis libère de l’espace : supprime des photos du chat ou des sons personnalisés.',{danger:true,icon:'x'})}catch(e){}},0)}}try{scheduleAlarms()}catch(e){}};
 const col=h=>(CAT[h.cat]||CAT.free)[1];
-const htime=(h,day)=>h.dayTimes&&h.dayTimes[day]||h.time;
+const htime=(h,day)=>h.dayTimes&&h.dayTimes[day]||h.time; const hdur=(h,day)=>Number((h.dayDurs&&h.dayDurs[day])||h.dur||0);
 const hend=(h,day)=>mins(htime(h,day))+Number(h.dur||0);
 const sched=d=>S.habits.filter(h=>h.days.includes(d.getDay())).sort((a,b)=>htime(a,d.getDay()).localeCompare(htime(b,d.getDay())));
 const isDone=(h,k)=>(S.done[k]||[]).includes(h.id);
@@ -397,7 +397,8 @@ function findHabit(id,name){if(id){const h=S.habits.find(x=>x.id===id);if(h)retu
 function parseHHMM(v){const m=String(v||'').match(/(\d{1,2})\s*[:hH]?\s*(\d{2})?/);if(!m)return '';const h=Math.min(23,Math.max(0,+m[1])),mi=Math.min(59,Math.max(0,+(m[2]||0)));return pad(h)+':'+pad(mi)}
 function guessCat(name){const t=norm(name);if(has(t,'math','physique','chim','hist','francais','anglais','revi','cours','etud','dm\\b','exo','code','program'))return'studies';if(has(t,'sport','foot','course','muscu','yoga','marche','natation','basket'))return'sport';if(has(t,'dodo','sommeil','coucher','reveil','sieste'))return'sleep';if(has(t,'travail','boulot','deep work','reunion','mail'))return'work';if(has(t,'repas','dej','diner','petit dej','manger','cuisine'))return'meals';return'personal'}
 function guessIcon(cat){return {studies:'book',sport:'dumbbell',sleep:'moon',work:'briefcase',personal:'heart',meals:'utensils',free:'sun'}[cat]||'sun'}
-function applyMaraActions(actions){if(!Array.isArray(actions)||!actions.length)return [];const notes=[];for(const a of actions.slice(0,12)){try{if(a.type==='upsert_habit'){const time=parseHHMM(a.time)||'08:00',dur=Math.max(1,Math.min(600,Number(a.dur)||45));const days=Array.isArray(a.days)&&a.days.length?a.days.map(Number).filter(d=>d>=0&&d<=6):[...ALL];const cat=CAT[a.cat]?a.cat:guessCat(a.name||'');const exist=findHabit(a.id,a.name);const o=exist?exist:{id:'h'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:'',desc:'',cat,icon:guessIcon(cat),time,dur,days:[...days],dayTimes:{},alarm:true,snd:''};if(a.name)o.name=String(a.name).slice(0,60);if(a.desc!=null)o.desc=String(a.desc).slice(0,400);if(CAT[a.cat])o.cat=a.cat;if(a.icon&&P[a.icon])o.icon=a.icon;if(a.time)o.time=time;if(a.dur)o.dur=dur;if(Array.isArray(a.days)&&a.days.length)o.days=days;if(a.dayTimes&&typeof a.dayTimes==='object')o.dayTimes={...(o.dayTimes||{}),...a.dayTimes};if(typeof a.alarm==='boolean')o.alarm=a.alarm;if(!exist)S.habits.push(o);notes.push(`« ${o.name} » ${o.time} · ${o.dur} min`)}else if(a.type==='delete_habit'){const h=findHabit(a.id,a.name);if(h){S.habits=S.habits.filter(x=>x.id!==h.id);notes.push('supprimé : '+h.name)}}else if(a.type==='set_habit_time'){const h=findHabit(a.id,a.name);if(h){const time=parseHHMM(a.time);if(!time)continue;if(a.day!=null&&a.day>=0&&a.day<=6){h.dayTimes=h.dayTimes||{};h.dayTimes[a.day]=time}else h.time=time;if(a.dur)h.dur=Math.max(1,Math.min(600,Number(a.dur)));notes.push(h.name+' → '+time)}}else if(a.type==='mark_habit'){const h=findHabit(a.id,a.name);if(h){const k=key(new Date()),arr=S.done[k]||[];const on=!!a.done;S.done[k]=on?(arr.includes(h.id)?arr:[...arr,h.id]):arr.filter(x=>x!==h.id)}}else if(a.type==='remember_fact'&&a.fact){const mem=memStore();const fact=String(a.fact).slice(0,280);if(!mem.some(x=>x.fact===fact)){mem.push({t:Date.now(),cat:a.category||'vie',fact});if(mem.length>80)mem.shift()}notes.push('retenu')}else if(a.type==='forget_fact'&&a.fact){const q=norm(String(a.fact));S.mara.memory=(S.mara.memory||[]).filter(x=>!norm(x.fact).includes(q))}}catch(e){}}save();scheduleAlarms();return notes}
+function isProgramRewrite(t){return /\b(programme a change|le programme change|nouveau programme|nouvel emploi du temps|nouvel emploi de temps|change de metier|change de boulot|j ai change de metier|je change de metier|desormais|a la place|nouveau planning|reorganis|re organis|tout (?:a |est )?change|contenu (?:a )?change|metier a change|nouvelle routine|nouvelle vie|repars? de zero|efface(?:r)? tout|supprime tout|remplace(?:r)? (?:tout|mon planning|le planning|le programme|mes habitudes))\b/.test(t)||(/\b(remplace|remplacer)\b/.test(t)&&/\b(planning|programme|emploi du temps|routine|habitudes)\b/.test(t))}
+function applyMaraActions(actions){if(!Array.isArray(actions)||!actions.length)return [];const notes=[];for(const a of actions.slice(0,12)){try{if(a.type==='upsert_habit'){const time=parseHHMM(a.time)||'08:00',dur=Math.max(1,Math.min(600,Number(a.dur)||45));const days=Array.isArray(a.days)&&a.days.length?a.days.map(Number).filter(d=>d>=0&&d<=6):[...ALL];const cat=CAT[a.cat]?a.cat:guessCat(a.name||'');const exist=findHabit(a.id,a.name);const o=exist?exist:{id:'h'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:'',desc:'',cat,icon:guessIcon(cat),time,dur,days:[...days],dayTimes:{},dayDurs:{},alarm:true,snd:''};if(a.name)o.name=String(a.name).slice(0,60);if(a.desc!=null)o.desc=String(a.desc).slice(0,400);if(CAT[a.cat])o.cat=a.cat;if(a.icon&&P[a.icon])o.icon=a.icon;if(a.time)o.time=time;if(a.dur)o.dur=dur;if(Array.isArray(a.days)&&a.days.length)o.days=days;if(a.dayTimes&&typeof a.dayTimes==='object')o.dayTimes={...(o.dayTimes||{}),...a.dayTimes};if(a.dayDurs&&typeof a.dayDurs==='object')o.dayDurs={...(o.dayDurs||{}),...a.dayDurs};if(typeof a.alarm==='boolean')o.alarm=a.alarm;if(!exist)S.habits.push(o);notes.push(`« ${o.name} » ${o.time} · ${o.dur} min`)}else if(a.type==='delete_habit'){const h=findHabit(a.id,a.name);if(h){S.habits=S.habits.filter(x=>x.id!==h.id);notes.push('supprimé : '+h.name)}}else if(a.type==='set_habit_time'){const h=findHabit(a.id,a.name);if(h){const time=parseHHMM(a.time);if(!time)continue;if(a.day!=null&&a.day>=0&&a.day<=6){h.dayTimes=h.dayTimes||{};h.dayTimes[a.day]=time}else h.time=time;if(a.dur)h.dur=Math.max(1,Math.min(600,Number(a.dur)));try{silentPackDays(a.day!=null?[a.day]:h.days)}catch(x){}notes.push(h.name+' → '+time)}}else if(a.type==='mark_habit'){const h=findHabit(a.id,a.name);if(h){const k=key(new Date()),arr=S.done[k]||[];const on=!!a.done;S.done[k]=on?(arr.includes(h.id)?arr:[...arr,h.id]):arr.filter(x=>x!==h.id)}}else if(a.type==='remember_fact'&&a.fact){const mem=memStore();const fact=String(a.fact).slice(0,280);if(!mem.some(x=>x.fact===fact)){mem.push({t:Date.now(),cat:a.category||'vie',fact});if(mem.length>80)mem.shift()}notes.push('retenu')}else if(a.type==='forget_fact'&&a.fact){const q=norm(String(a.fact));S.mara.memory=(S.mara.memory||[]).filter(x=>!norm(x.fact).includes(q))}}catch(e){}}save();scheduleAlarms();return notes}
 
 /* --- Actions en langage naturel : ajouter / décaler (absolu ou relatif) /
    supprimer / marquer comme fait ou non fait / se souvenir ou oublier une
@@ -413,6 +414,22 @@ function tryAct(raw){
  if(has(t,'apres demain')){const d=(new Date().getDay()+2)%7;days=[d]}
  else if(has(t,'demain')){const d=(new Date().getDay()+1)%7;days=[d]}
  else {for(let i=0;i<7;i++)if(has(t,norm(DL[i])))days=[i]}
+
+ if(isProgramRewrite(t)){
+  const becomes=raw.match(/^(.{2,70}?)\s+(?:devient|c['’]est maintenant|est remplac[ée]e? par|se transforme en)\s+(.{2,70})$/i)
+   ||raw.match(/(?:à la place de|a la place de|remplace)\s+(.{2,70}?)\s+(?:par|c['’]est|:|→)\s+(.{2,70})$/i);
+  if(becomes){
+   const oldN=becomes[1].replace(/\s+(à|a|vers|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche).*/i,'').trim();
+   const newN=becomes[2].replace(/\s+(à|a|vers)\s+\d.*/i,'').replace(/\s+\d{1,2}\s*[:hH].*/,'').trim().slice(0,60);
+   const h=findHabit('',oldN);
+   if(h&&newN.length>=2){
+    const prev=h.name,cat=guessCat(newN);
+    applyMaraActions([{type:'upsert_habit',id:h.id,name:newN,cat,icon:guessIcon(cat),time:h.time,dur:h.dur,days:h.days,dayTimes:h.dayTimes,dayDurs:h.dayDurs}]);
+    return `C’est noté${N()} : « ${prev} » s’appelle maintenant « ${newN} ». Durée et horaires inchangés — dis-moi seulement si une heure doit vraiment changer.`;
+   }
+  }
+  return `D’accord${N()}. Colle-moi le nouveau programme (les noms des activités, dans l’ordre). Je change le contenu, je garde les durées, je déplace ce qu’il faut et j’évite les chevauchements. Je ne te redemanderai pas de rectifier les heures : indique un horaire seulement s’il change vraiment.`;
+ }
 
  /* Annuler une tâche marquée par erreur */
  const undoneM=t.match(/^(?:j ai pas|je n ai pas)\s+(?:fait|termine|fini)\s+(.+)/)||t.match(/^decoche\s+(.+)/);
@@ -624,7 +641,7 @@ function handleImage(id,file){if(!file)return;if(file.size>10*1024*1024){alert('
 
 /* Vues */
 const seg=(x,cls='')=>x;
-const hcard=(h,k,menu,day=new Date().getDay())=>{const d=isDone(h,k),t=htime(h,day),end=hm2(mins(t)+Number(h.dur||0));return`<div class="hc ${d?'dn':''}" style="--c:${col(h)}"><span class="ib">${ic(h.icon)}</span><div class="mt" data-a="edit" data-id="${h.id}"><b>${esc(h.name)}</b><small>${ic('clock')}${t}–${end} · ${h.dur} min<i class="bg">${CAT[h.cat][0]}</i>${h.alarm?ic('bell'):''}</small></div>${menu?'':`<button class="ck" data-a="tog" data-id="${h.id}" aria-label="Terminer">${ic('check')}</button>`}</div>`};
+const hcard=(h,k,menu,day=new Date().getDay())=>{const d=isDone(h,k),t=htime(h,day),end=hm2(mins(t)+hdur(h,day)),vary=(h.dayTimes&&Object.keys(h.dayTimes).length)||(h.dayDurs&&Object.keys(h.dayDurs).length);return`<div class="hc ${d?'dn':''}" style="--c:${col(h)}"><span class="ib">${ic(h.icon)}</span><div class="mt" data-a="edit" data-id="${h.id}"><b>${esc(h.name)}</b><small>${ic('clock')}${t}–${end} · ${hdur(h,day)} min<i class="bg">${CAT[h.cat][0]}</i>${vary?'<i class="bg">Horaires variables</i>':''}${h.alarm?ic('bell'):''}</small></div>${menu?'':`<button class="ck" data-a="tog" data-id="${h.id}" aria-label="Terminer">${ic('check')}</button>`}</div>`};
 let tab='todo',pd=new Date().getDay(),dr=null,br=false,rf='',scheduleMode=false;
 const ring=(pc,cap)=>`<svg viewBox="0 0 200 200" class="rg"><circle cx="100" cy="100" r="80" class="rb"/><circle cx="100" cy="100" r="80" class="rf" stroke-dasharray="502.65" stroke-dashoffset="${502.65*(1-pc)}" transform="rotate(-90 100 100)"/><text x="100" y="108" class="n">${Math.round(pc*100)}%</text><text x="100" y="128" class="l">AUJOURD’HUI</text><text x="100" y="148" class="c">${cap}</text></svg>`;
 function maraStatus(){
@@ -638,7 +655,7 @@ function maraStatus(){
    toucher d'émoticône ou de tâche. */
 function moodFrontHTML(){
  const k=key(new Date()),m=S.mood[k];
- return `<h2>Comment tu vas${N()} ?</h2><p class="mu" style="font-size:.9rem;margin-top:2px">Choisis ton humeur et note une petite chose à retenir.</p><div class="mood-strip">${[['good','😊','Bien'],['ok','🙂','Ça va'],['mixed','😐','Mitigé'],['hard','😔','Dur'],['angry','😤','Énervé']].map(x=>`<button data-a="mood" data-v="${x[0]}" class="${m&&m.m===x[0]?'a':''}">${x[1]}<span>${x[2]}</span></button>`).join('')}</div><input id="note" placeholder="Une chose à améliorer demain…" value="${m?esc(m.t||''):''}" maxlength="10000"><button class="btn g" data-a="note">Enregistrer</button>`;
+ return `<h2>Comment tu vas${N()} ?</h2><p class="mu" style="font-size:.9rem;margin-top:2px">Choisis ton humeur et note une petite chose à retenir.</p><div class="mood-strip">${[['good','😊','Bien'],['ok','🙂','Ça va'],['mixed','😐','Mitigé'],['hard','😔','Dur'],['angry','😤','Énervé']].map(x=>`<button data-a="mood" data-v="${x[0]}" class="${m&&m.m===x[0]?'a':''}">${x[1]}<span>${x[2]}</span></button>`).join('')}</div><input id="note" placeholder="Une chose à améliorer demain…" value="${m?esc(m.t||''):''}" maxlength="200"><button class="btn g" data-a="note">Enregistrer</button>`;
 }
 function moodBackHTML(){
  return `<h2 style="margin:0 0 6px">Ajouter une tâche</h2><p class="mu" style="font-size:.85rem;margin:0">Choisis un logo, écris la tâche : elle est rangée dans Mes tâches (icône livre).</p><div class="mood-strip tcat">${Object.keys(TC).map(k=>`<button data-a="taskCat" data-v="${k}" class="${k===tCat?'a':''}" style="--c:${TC[k][1]}">${ic(TC[k][2])}<span>${TC[k][0]}</span></button>`).join('')}</div><div style="display:flex;gap:8px;align-items:stretch;margin-top:10px"><input id="taskDraft" placeholder="Ex. préparer mon sac" maxlength="160" style="min-width:0;flex:1;margin-top:0"><button class="btn g" data-a="taskAdd" style="width:auto;flex:none;padding:0 16px;margin-top:0">Ajouter</button></div>${taskOk?`<p id="taskOk" class="mu" style="font-size:.85rem;margin:10px 0 0">✓ Ajoutée dans Mes tâches (icône livre). <button data-a="openTasks" style="background:none;border:0;padding:0;color:var(--pr);font:inherit;text-decoration:underline;cursor:pointer">Voir</button></p>`:''}`;
@@ -710,7 +727,7 @@ return`<header class="rise"><p class="cap">Réglages</p><h1>Profil</h1></header>
 <section class="card" style="padding-bottom:8px"><h2>Alarmes</h2><label class="tg"><span>Rappels activés</span><input type="checkbox" class="sw" data-a="pn" ${S.prefs.notif?'checked':''}></label><label class="tg"><span>Report</span><select data-a="psn" style="width:auto;margin:0">${[5,10,15,30].map(x=>`<option value="${x}" ${x===S.prefs.snooze?'selected':''}>${x} min</option>`).join('')}</select></label><label class="tg" style="display:block"><span style="display:flex;justify-content:space-between"><span>Volume</span><small>${Math.round(S.prefs.vol*100)}%</small></span><input type="range" min="10" max="100" value="${S.prefs.vol*100}" data-a="pvol"></label><p class="mu" style="font-size:.78rem;margin:0 0 8px">Sonnerie type app Horloge. L’alarme continue en arrière-plan tant que l’app reste ouverte ou installée, avec une notification.</p></section>
 <section class="card"><h2>Rappels de tes notes et tâches</h2><p class="mu" style="font-size:.85rem;margin:4px 0 10px">Aube peut t’envoyer un rappel aléatoire d’une note enregistrée ou d’une tâche en attente. Autorise les notifications pour les recevoir.</p><label class="tg"><span>Rappels aléatoires</span><input type="checkbox" class="sw" data-a="reflectionNotify" ${S.prefs.reflectionNotify?'checked':''}></label></section><section class="card"><h2>Sons d’alarme</h2><p class="mu" style="font-size:.85rem;margin:2px 0 8px">Touche un nom pour le choisir par défaut. Chaque habitude peut aussi avoir son propre son.</p>${Object.entries(BI).map(([i,x])=>sn(i,x[0])).join('')}${CS.map(x=>sn(x.id,x.name,1)).join('')}<label class="btn g" style="cursor:pointer;color:var(--fg)">${ic('up')} Ajouter mon propre son<input type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.caf" data-a="as" hidden></label><p class="mu" style="font-size:.78rem;margin-top:8px">MP3, WAV, M4A, OGG… chaque fichier est vérifié et compressé (8 s, mono) pour rester léger. Les sons restent sur ton appareil.</p></section>
 
-<section class="card"><h2>Données</h2><p class="mu" style="font-size:.85rem;margin-top:2px">Tout reste sur ton appareil.</p><button class="btn g" data-a="exp">${ic('down')} Exporter une sauvegarde</button><label class="btn g" style="cursor:pointer;color:var(--fg)">${ic('up')} Importer un fichier<input type="file" accept="*/*" data-a="impf" hidden></label><p class="mu" style="font-size:.78rem;margin:8px 0 2px">Jusqu’à 10 Mo. Sauvegarde Aube (.json ou .zip) : tout est restauré dans Habitudes, Tâches, Notes… avec une barre de progression. Emploi du temps (.txt, .csv, .ics, .docx), photo d’emploi du temps ou son d’alarme aussi.</p><button class="btn d" data-a="rst">Tout réinitialiser</button></section><p class="mu" style="text-align:center;font-size:.72rem;margin:14px 0 4px">Aube · version ${BUILD}</p>`}
+<section class="card"><h2>Données</h2><p class="mu" style="font-size:.85rem;margin-top:2px">Tout reste sur ton appareil.</p><button class="btn g" data-a="exp">${ic('down')} Exporter une sauvegarde</button><label class="btn g" style="cursor:pointer;color:var(--fg)">${ic('up')} Importer un fichier<input type="file" data-a="impf" hidden></label><p class="mu" style="font-size:.78rem;margin:8px 0 2px">Jusqu’à 10 Mo. Sauvegarde Aube (.json ou .zip) : tout est restauré dans Habitudes, Tâches, Notes… avec une barre de progression. Emploi du temps (.txt, .csv, .ics, .docx), photo d’emploi du temps ou son d’alarme aussi.</p><button class="btn d" data-a="rst">Tout réinitialiser</button></section><p class="mu" style="text-align:center;font-size:.72rem;margin:14px 0 4px">Aube · version ${BUILD}</p>`}
 };
 function exportTimetableImage(){
  const hs=S.habits.filter(h=>h.days.includes(pd)).slice().sort((a,b)=>mins(htime(a,pd))-mins(htime(b,pd)));
@@ -762,7 +779,7 @@ async function holdWake(on){try{if(!on){await wakeLock?.release();wakeLock=null;
 /* Appui long sur une habitude → demande de suppression (même design que le reste) */
 let lpT=null,lpFired=false,lpX=0,lpY=0;
 function showDeleteHabitLP(h){document.getElementById('habit-delete-overlay')?.remove();const m=document.createElement('div');m.id='habit-delete-overlay';m.style.cssText='position:fixed;inset:0;z-index:10001;background:rgba(3,7,18,.82);display:flex;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(7px)';m.innerHTML=`<section class="card" style="width:min(100%,420px);padding:22px;border:1px solid var(--bd);box-shadow:0 24px 70px #0008;margin:0"><div class="mara-head"><span class="mara-avatar" style="color:var(--dg)">${ic('trash')}</span><div><p class="cap" style="margin-bottom:3px">Suppression</p><h2 style="margin:0">Supprimer cette habitude ?</h2></div></div><p style="margin:14px 0">« ${esc(h.name)} » sera retirée de ta routine. Cette action ne peut pas être annulée.</p><button class="btn" id="lpYes" style="background:var(--dg)">Supprimer</button><button class="btn g" id="lpNo">Garder</button></section>`;document.body.appendChild(m);m.querySelector('#lpNo').onclick=()=>m.remove();m.onclick=e=>{if(e.target===m)m.remove()};m.querySelector('#lpYes').onclick=()=>{S.habits=S.habits.filter(x=>x.id!==h.id);save();scheduleAlarms();m.remove();render()}}
-document.addEventListener('pointerdown',e=>{const c=e.target.closest('.hc');if(!c||e.target.closest('.ck,button,input'))return;const el=c.querySelector('[data-id]'),h=el&&S.habits.find(x=>x.id===el.dataset.id);if(!h)return;lpX=e.clientX;lpY=e.clientY;clearTimeout(lpT);lpT=setTimeout(()=>{lpFired=true;navigator.vibrate&&navigator.vibrate(30);showDeleteHabitLP(h)},550)},{passive:true});
+document.addEventListener('pointerdown',e=>{const c=e.target.closest('.hc');if(!c||c.classList.contains('plan-drag')||e.target.closest('.ck,button,input'))return;const el=c.querySelector('[data-id]'),h=el&&S.habits.find(x=>x.id===el.dataset.id);if(!h)return;lpX=e.clientX;lpY=e.clientY;clearTimeout(lpT);lpT=setTimeout(()=>{lpFired=true;navigator.vibrate&&navigator.vibrate(30);showDeleteHabitLP(h)},550)},{passive:true});
 document.addEventListener('pointermove',e=>{if(lpT&&(Math.abs(e.clientX-lpX)>10||Math.abs(e.clientY-lpY)>10)){clearTimeout(lpT);lpT=null}},{passive:true});
 ['pointerup','pointercancel'].forEach(t=>document.addEventListener(t,()=>{clearTimeout(lpT);lpT=null;setTimeout(()=>{lpFired=false},350)},{passive:true}));
 document.addEventListener('click',e=>{if(lpFired){e.preventDefault();e.stopImmediatePropagation();lpFired=false}},true);
@@ -799,39 +816,7 @@ function parseSchedule(text){
   while((m=re.exec(n))){const d=DAY_WORDS[m[1]];if(d!=null&&!out.includes(d))out.push(d)}
   return out.length?out:null;
  };
-  /* Tableaux de planning : Jour | Horaire | Activité | Durée.
-     Les durées explicites calculent la fin automatiquement, même si elle passe minuit. */
-  const tableSrc=String(text||'').replace(/\r/g,'').split('\n');
-  const tableRows=[];let tableDay=null,tableHeader=null;
-  const parseClock=v=>{const m=new RegExp('^\\s*'+TS+'\\s*$').exec(String(v||'').trim());return m&&okT(m[1],m[2])?toM(m[1],m[2]):null};
-  const parseDuration=v=>{const x=norm2(v);let m=/\b(\d{1,3})\s*(?:h|heure|heures)\s*(?:(\d{1,2})\s*(?:min|mn|minutes?)?)?\b/.exec(x);if(m)return +m[1]*60+ +(m[2]||0);m=/\b(\d{1,4})\s*(?:min|mn|minutes?)\b/.exec(x);return m?+m[1]:0};
-  for(const raw of tableSrc){
-   let cells=raw.split(/[|;\t]/).map(x=>x.trim());
-   const headerCells=cells.slice();while(headerCells.length&&headerCells[0]==='')headerCells.shift();while(headerCells.length&&headerCells[headerCells.length-1]==='')headerCells.pop();
-   const n=norm2(headerCells.join(' '));
-   if(/\b(jour|jours)\b/.test(n)&&/\b(horaire|heure|debut)\b/.test(n)&&/\b(duree|cours|activite|activites)\b/.test(n)){
-    tableHeader={day:headerCells.findIndex(x=>/jour/i.test(norm2(x))),start:headerCells.findIndex(x=>/horaire|heure|debut|start/i.test(norm2(x))),end:headerCells.findIndex(x=>/fin|end/i.test(norm2(x))),name:headerCells.findIndex(x=>/cours|activite|matiere|nom|tache/i.test(norm2(x))),dur:headerCells.findIndex(x=>/duree|dur/i.test(norm2(x)))};continue;
-   }
-   if(!tableHeader){cells=headerCells;if(cells.length<3)continue}
-   else {if(cells[0]===''&&/^\s*[|;]/.test(raw))cells.shift();while(cells.length&&cells[cells.length-1]==='')cells.pop();}
-   if(cells.length<3)continue;
-   if(!tableHeader||cells.every(x=>!x||/^[-:=]+$/.test(x)))continue;
-   const d=parseDays(cells[tableHeader.day>=0?tableHeader.day:0]);if(d&&d.length)tableDay=d;
-   let startIndex=tableHeader.start>=0?tableHeader.start:1;
-   const start=parseClock(cells[startIndex]);if(start==null)continue;
-   const endIndex=tableHeader.end;
-   const explicitEnd=endIndex>=0?parseClock(cells[endIndex]):null;
-   const durationIndex=tableHeader.dur>=0?tableHeader.dur:cells.length-1;
-   let name='';
-   if(tableHeader.name>=0)name=cells[tableHeader.name]||'';
-   else name=cells.filter((x,i)=>i!==tableHeader.day&&i!==startIndex&&i!==endIndex&&i!==durationIndex&&!parseClock(x)).join(' ');
-   name=String(name).replace(/^\s*\d+[.)]\s*/,'').trim();if(!name)continue;
-   let dur=explicitEnd!=null?(explicitEnd>start?explicitEnd-start:explicitEnd+1440-start):parseDuration(cells[durationIndex]);
-   if(!(dur>0))dur=30;
-   tableRows.push({name,s:start,e:start+dur,days:tableDay?[...tableDay]:null,autoEnd:true});
-  }
-  if(tableRows.length)return{rows:tableRows,days:tableDay,leftover:0,dayless:tableRows.filter(r=>!r.days).length};
-  /* Une ligne « jour seul » : ne contient (presque) que des noms de jours, date éventuelle, ponctuation */
+ /* Une ligne « jour seul » : ne contient (presque) que des noms de jours, date éventuelle, ponctuation */
  const dayOnly=line=>{
   const n=norm2(line);if(!n)return null;
   const stripped=n.replace(new RegExp('\\b'+DAY_RE+'s?\\b','g'),' ').replace(/\b(du|au|a|et|le|les|de|chaque|tous|jours|jour|semaine|en|week|end|weekend|ouvres|toute|la|planning|programme|emploi|temps|matin|soir|apres|midi|\d{1,2}|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\b/g,' ').replace(/\s+/g,' ').trim();
@@ -843,9 +828,18 @@ function parseSchedule(text){
   .replace(/\b(de|du|d|entre|vers|à|a|le|la|les|pour|pendant|dès|des|jusqu|jusque)\s*$/i,'').replace(/^(?:à|vers|dès)\s+/i,'')
   .replace(/^[\s:,;.\-–|/\\()]+|[\s:,;.\-–|/\\()]+$/g,'').replace(/\s+/g,' ').trim();
  const rows=[],pT=[],pN=[];let days=null,first=null,dayless=0;
- const push=(name,s,e,d,dur)=>{
+ const push=(name,s,e,d,dur,meta={})=>{
   if(dur&&e==null)e=s+dur;
-  rows.push({name,s,e,days:d&&d.length?[...d]:null})
+  rows.push({name,s,e,days:d&&d.length?[...d]:null,icon:meta.icon||'',desc:meta.desc||''})
+ };
+ const metaOf=line=>{
+  let icon='',desc='';
+  const im=/(?:ic[oô]ne)\s*[:=]?\s*(?:une?\s+)?(goutte(?:\s+d['’ ]eau)?|eau|coeur|cœur|livre|lecture|soleil|sport|velo|vélo|code|musique|feuille|cerveau|repas|lune|personnel|dumbbell|droplet|book|sun|heart)(?=\s|$|[,.)])/i.exec(line);
+  if(im){const v=norm2(im[1]);icon=/goutte|eau|droplet/.test(v)?'droplet':/coeur|cœur|heart/.test(v)?'heart':/livre|lecture|book/.test(v)?'book':/soleil|sun/.test(v)?'sun':/sport|dumbbell/.test(v)?'dumbbell':/velo|vélo/.test(v)?'bike':/code/.test(v)?'code':/musique/.test(v)?'music':/feuille/.test(v)?'leaf':/cerveau/.test(v)?'brain':/repas/.test(v)?'utensils':/lune/.test(v)?'moon':'';line=line.replace(im[0],' ')}
+  const dm=/(?:description|d[eé]tails?)\s*[:=]\s*(.+)$/i.exec(line);
+  if(dm){desc=dm[1].trim().replace(/[.)]+$/,'');line=line.slice(0,dm.index)}
+  else {const tail=/\)\s*-\s*(.+)$/.exec(line);if(tail){desc=tail[1].trim().replace(/[.)]+$/,'');line=line.slice(0,tail.index+1)}}
+  return{line,icon,desc};
  };
  const flush=()=>{while(pT.length&&pN.length){const t=pT.shift();push(pN.shift(),t[0],t[1],days,t[2])}};
  const durOf=line=>{
@@ -902,20 +896,21 @@ function parseSchedule(text){
   else parts.push(line);
   let handled=false;
   for(let part of parts){
+   const meta=metaOf(part);part=meta.line;
    const dd=durOf(part);part=dd.line;
    const stripT=x=>x.replace(new RegExp('(?:jusqu\\S*\\s+|à\\s+|vers\\s+)?'+TS,'gi'),' ');
    const r=RANGE.exec(part);
    if(r&&okT(r[1],r[2])&&okT(r[3],r[4])){
     const name=clean(stripT(part.slice(0,r.index)+' '+part.slice(r.index+r[0].length)));
-    const s=toM(r[1],r[2]);let e=toM(r[3],r[4]);if(e<=s)e+=1440;
-    if(name)push(name,s,e,eff);else{pT.push([s,e,0]);if(lineDays)days=lineDays;flush()}
+    const s=toM(r[1],r[2]);let e=toM(r[3],r[4]);
+    if(name)push(name,s,e,eff,dd.dur,meta);else{pT.push([s,e,dd.dur,meta]);if(lineDays)days=lineDays;flush()}
     handled=true;continue;
    }
    const t=ONE.exec(part);
    if(t&&okT(t[1],t[2])){
     const name=clean(stripT(part));
-    if(name)push(name,toM(t[1],t[2]),null,eff,dd.dur);
-    else{pT.push([toM(t[1],t[2]),null,dd.dur]);if(lineDays)days=lineDays;flush()}
+    if(name)push(name,toM(t[1],t[2]),null,eff,dd.dur,meta);
+    else{pT.push([toM(t[1],t[2]),null,dd.dur,meta]);if(lineDays)days=lineDays;flush()}
     handled=true;continue;
    }
   }
@@ -937,7 +932,7 @@ function parseSchedule(text){
 }
 
 /* ══════════════ IMPORT DE FICHIERS · RESTAURATION · EMPLOI DU TEMPS (v5) ══════════════ */
-const BUILD='28/09/2026 · import v6';
+const BUILD='29/09/2026 · import v7';
 const pause=ms=>new Promise(r=>setTimeout(r,ms));
 const fmtSize=n=>n>=1048576?(n/1048576).toFixed(1).replace('.',',')+' Mo':Math.max(1,Math.round(n/1024))+' Ko';
 const daysLabel=ds=>{ds=[...new Set(ds)].sort((a,b)=>((a+6)%7)-((b+6)%7));return ds.length===7?'tous les jours':(ds.length===5&&!ds.includes(0)&&!ds.includes(6))?'lun–ven':(ds.length===2&&ds.includes(0)&&ds.includes(6))?'week-end':ds.map(d=>DL[d].slice(0,3)).join(' ')};
@@ -1049,7 +1044,7 @@ function applyScheduleRows(rows,o){
   if(ex){const nd=[...v.d].filter(d=>!ex.days.includes(d));if(!nd.length){dup++;return}ex.days=[...ex.days,...nd].sort();added.push({name:ex.name,s:v.x.s,dur:ex.dur,days:nd});return}
   const cat=guessCat(v.x.name),days=[...v.d].sort((a,b)=>a-b);
   if(days.some(d=>S.habits.some(h=>h.days.includes(d)&&mins(htime(h,d))<v.x.s+v.x.dur&&v.x.s<hend(h,d))))over++;
-  const h={id:'h'+Date.now().toString(36)+i+Math.random().toString(36).slice(2,4),name:v.x.name,desc:'',cat,icon:guessIcon(cat),time:hm2(v.x.s),dayTimes:{},dur:v.x.dur,days,alarm:true,snd:''};
+  const h={id:'h'+Date.now().toString(36)+i+Math.random().toString(36).slice(2,4),name:v.x.name,desc:String(v.x.desc||'').slice(0,400),cat,icon:P[v.x.icon]?v.x.icon:guessIcon(cat),time:hm2(v.x.s),dayTimes:{},dur:v.x.dur,days,alarm:true,snd:''};
   S.habits.push(h);added.push({name:h.name,s:v.x.s,dur:h.dur,days});
  });
  save();try{scheduleAlarms()}catch(e){}
@@ -1206,7 +1201,7 @@ function openImport(text,img){
   if(t.id==='impSave'&&!t.disabled){const sel=st.rows.filter(r=>r.on),aff=new Set();sel.forEach(r=>dl(r).forEach(d=>aff.add(d)));
    if(st.rep)S.habits=S.habits.map(h=>({...h,days:h.days.filter(d=>!aff.has(d))})).filter(h=>h.days.length);
    const g={};sel.forEach(r=>{const k=norm(r.name)+'|'+r.s+'|'+(r.e-r.s);(g[k]=g[k]||{r,d:new Set()});dl(r).forEach(d=>g[k].d.add(d))});
-   const list=Object.values(g);list.forEach((x,i)=>{const cat=guessCat(x.r.name);S.habits.push({id:'h'+Date.now().toString(36)+i,name:x.r.name.trim(),desc:'',cat,icon:guessIcon(cat),time:hm2(x.r.s),dayTimes:{},dur:x.r.e-x.r.s,days:[...x.d].sort(),alarm:true,snd:''})});
+   const list=Object.values(g);list.forEach((x,i)=>{const cat=guessCat(x.r.name);S.habits.push({id:'h'+Date.now().toString(36)+i,name:x.r.name.trim(),desc:String(x.r.desc||'').slice(0,400),cat,icon:P[x.r.icon]?x.r.icon:guessIcon(cat),time:hm2(x.r.s),dayTimes:{},dur:x.r.e-x.r.s,days:[...x.d].sort(),alarm:true,snd:''})});
    S.chat=S.chat||[];S.chat.push({r:'a',t:`C’est fait${N()} : ${list.length} habitude${list.length>1?'s':''} ajoutée${list.length>1?'s':''} depuis ton emploi du temps, avec les horaires que tu as validés.`});save();scheduleAlarms();m.remove();render()}};
  m.oninput=e=>{const t=e.target,D=t.dataset;if(D.n!==undefined)st.rows[+D.n].name=t.value;else if(D.s!==undefined||D.e!==undefined){const i=+(D.s??D.e),v=t.value,mm=v?mins(v):null;if(D.s!==undefined){const dur=st.rows[i].e!=null?st.rows[i].e-st.rows[i].s:30;st.rows[i].s=mm??0;if(!st.rows[i].manualE)st.rows[i].e=st.rows[i].s+dur}else{st.rows[i].e=mm;st.rows[i].manualE=true}}else return;recalc()};
  document.body.appendChild(m);st.text=text||'';const p=text?parseSchedule(text):{rows:[]};if(p.rows.length){st.rows=p.rows.map(r=>({...r,on:true}));st.leftover=p.leftover;st.chips=new Set(p.days||[])}draw();
@@ -1219,7 +1214,11 @@ try{if(Notification.permission==='granted'){const t=htime(h,new Date().getDay())
 function tick(){if(!S.prefs.notif||$('#alarm').innerHTML)return;const n=new Date(),k=key(n),cur=n.getHours()*60+n.getMinutes();
 for(const h of sched(n)){if(!h.alarm||isDone(h,k))continue;const id=h.id+k,m=mins(htime(h,n.getDay())),sn=S.fired[id+'s'];if(sn?cur>=sn:(cur>=m&&cur-m<=8&&!S.fired[id])){S.fired[id]=1;delete S.fired[id+'s'];save();ringAl(h);scheduleAlarms();return}}}
 let activeDayKey=key(new Date());setInterval(()=>{const todayKey=key(new Date());if(todayKey!==activeDayKey){activeDayKey=todayKey;render();scheduleAlarms()}tick();checkReflectionReminder();if(document.hidden&&S.prefs.notif){try{navigator.serviceWorker?.controller?.postMessage({type:'aube-ping',now:Date.now(),alarms:nextAlarms()})}catch(e){}}},document.hidden?15000:1000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden){unlockAudio();tick();scheduleAlarms();render();holdWake(!!S.prefs.notif)}});
+/* Android : le sélecteur de fichiers masque la page ; au retour, ne pas redessiner tout de suite (sinon le champ fichier est détruit et le choix est perdu) */
+let filePicking=false;
+document.addEventListener('click',e=>{const l=e.target.closest&&e.target.closest('label');if((e.target.matches&&e.target.matches('input[type=file]'))||(l&&l.querySelector('input[type=file]')))filePicking=true},true);
+document.addEventListener('change',e=>{if(e.target&&e.target.type==='file')setTimeout(()=>{filePicking=false},2500)},true);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){unlockAudio();tick();scheduleAlarms();if(filePicking){setTimeout(()=>{filePicking=false},2500)}else render();holdWake(!!S.prefs.notif)}});
 if('serviceWorker'in navigator)navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.type==='aube-alarm'){tick();if(!$('#alarm').innerHTML){const id=e.data.payload&&e.data.payload.id,h=S.habits.find(x=>x.id===id);if(h)ringAl(h)}}});
 
 /* Actions */
@@ -1436,7 +1435,7 @@ pd(t){pd=+t.dataset.v;render()},
 mood(t){const k=key(new Date()),o=S.mood[k]||{th:[]},m=t.dataset.v,ch=o.m!==m;o.th=o.th||[];o.m=m;o.t=($('#note')||{}).value||o.t||'';S.mood[k]=o;if(ch)o.th.push({r:'a',t:moodReply(m)});save();
  /* Mise à jour ciblée : on change seulement l'état des boutons, sans reconstruire la page (plus de clignotement). */
  const strip=t.closest('.mood-strip');if(strip)strip.querySelectorAll('button').forEach(b=>b.classList.toggle('a',b===t));else refreshMoodCard()},
-note(){const k=key(new Date()),o=S.mood[k]||{m:'',th:[]},v=($('#note')||{}).value?.trim()||'';o.th=o.th||[];S.mood[k]=o;if(v){o.th.push({r:'u',t:v},{r:'a',t:noteReply(o.m,v)});S.reflections=S.reflections||[];S.reflections.push({id:'r'+Date.now().toString(36),date:new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'}),day:k,m:o.m||'ok',t:v,created:Date.now()});}o.t='';save();const noteInput=$('#note');if(noteInput)noteInput.value='';refreshMoodCard()},
+note(){const k=key(new Date()),o=S.mood[k]||{m:'',th:[]},v=($('#note')||{}).value?.trim()||'';o.th=o.th||[];S.mood[k]=o;if(v){o.th.push({r:'u',t:v},{r:'a',t:noteReply(o.m,v)});S.reflections=S.reflections||[];S.reflections.push({id:'r'+Date.now().toString(36),date:new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'}),day:k,m:o.m||'ok',t:v,created:Date.now()});}o.t='';save();refreshMoodCard()},
 taskAdd(){const el=$('#taskDraft'),t=(el?.value||'').trim();if(!t)return;S.tasks=S.tasks||[];S.tasks.unshift({id:'task-'+Date.now().toString(36),t,c:tCat,done:false,created:Date.now()});save();taskOk=true;clearTimeout(taskOkT);taskOkT=setTimeout(()=>{taskOk=false;document.getElementById('taskOk')?.remove();syncFlipHeight()},3500);refreshMoodCard();const d=$('#taskDraft');d&&d.focus()},
 taskCat(t){tCat=TC[t.dataset.v]?t.dataset.v:'oublis';t.closest('.mood-strip').querySelectorAll('button').forEach(b=>b.classList.toggle('a',b===t))},
 taskTog(t){const x=(S.tasks||[]).find(x=>x.id===t.dataset.id);if(x){x.done=!x.done;x.completed=x.done?Date.now():null;save();navigator.vibrate&&navigator.vibrate(25);render()}},
@@ -1531,20 +1530,6 @@ document.addEventListener('focusin',e=>{if(e.target.matches('.mara-screen .cin t
 document.addEventListener('focusout',e=>{if(e.target.matches('.mara-screen .cin textarea'))setTimeout(()=>{if(!document.activeElement?.matches('.mara-screen .cin textarea'))document.body.classList.remove('chat-keyboard')},180)});
 document.addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(!t||/^(INPUT|SELECT)$/.test(t.tagName)||!A[t.dataset.a])return;A[t.dataset.a](t)});
 document.addEventListener('input',e=>{const t=e.target;if(t.dataset.in&&dr){dr[t.dataset.in]=t.value}else if(t.dataset.daytime&&dr){dr.dayTimes=dr.dayTimes||{};dr.dayTimes[t.dataset.daytime]=t.value}else if(t.dataset.a==='pvol'){S.prefs.vol=t.value/100;save();if(cur&&cur.a)cur.a.volume=S.prefs.vol}});
-/* Import mobile robuste : certains sélecteurs Android rendent le focus avant le change. */
-const importingFiles=new WeakSet();
-function startFileImportInput(input){
- const file=input&&input.files&&input.files[0];if(!file)return false;
- if(importingFiles.has(input))return true;
- importingFiles.add(input);
- try{input.value=''}catch(e){}
- Promise.resolve(openFileImport(file)).catch(()=>showInfoModal('Import interrompu','Aube n’a pas pu ouvrir ce fichier. Réessaie depuis Téléchargements.',{danger:true,icon:'up'})).finally(()=>importingFiles.delete(input));
- return true;
-}
-window.addEventListener('focus',()=>{
- const input=document.querySelector('input[data-a="impf"]');
- if(input&&input.files&&input.files.length)startFileImportInput(input);
-});
 document.addEventListener('change',async e=>{const t=e.target,a=t.dataset.a;if(!a)return;
 if(a==='taskToggle'){A.taskToggle(t);return}
 if(a==='reflectionNotify'){if(t.checked){try{if(!('Notification'in window)){throw new Error('no-notification')}if(Notification.permission==='denied'){t.checked=false;showInfoModal('Notifications bloquées','Tu as déjà refusé les notifications pour Aube dans ton navigateur. Pour activer ce rappel, autorise-les depuis les réglages du site (l’icône ⓘ ou 🔒 à côté de l’adresse), puis reviens ici.',{danger:true,icon:'bell'});return}if(Notification.permission==='default')await Notification.requestPermission()}catch(x){}if(!('Notification'in window)||Notification.permission!=='granted'){t.checked=false;showInfoModal('Notifications indisponibles','Ton navigateur n’a pas autorisé les notifications ici. Réessaie depuis les réglages du site, ou vérifie que ton navigateur les prend en charge.',{danger:true,icon:'bell'});return}}S.prefs.reflectionNotify=t.checked;save();render();return}
@@ -1553,7 +1538,7 @@ else if(a==='psn')S.prefs.snooze=+t.value;else if(a==='pvol'){render();return}
 else if(a==='ff'||a==='fa'||a==='fs'){A[a](t);return}
 else if(a==='ai'){A.ai(t);return}
 else if(a==='as'&&t.files[0]){const f=t.files[0];if(f.size>6e6){alert('Fichier trop lourd (6 Mo max).');return}if(CS.length>=8){alert('Espace limité : 8 sons perso max. Supprime-en un d’abord.');return}try{const blob=await transcodeAlarm(f);const id='c'+Date.now();const name=f.name.replace(/\.[^.]+$/,'')||'Mon son';await idbDo('readwrite',s=>s.put({id,name,blob}));CS.push({id,name,blob});delete decodedBuf[id];S.prefs.snd=id;save();render();pl=id;play(id,false)}catch(x){alert(x&&x.message==='court'?'Ce son est trop court.':'Impossible de lire ce fichier. Essaie un MP3, WAV, M4A ou AAC.')}return}
-else if((a==='imp'||a==='impf')){if(importingFiles.has(t))return;if(t.files&&t.files[0]){startFileImportInput(t);return}if(a==='impf'){showInfoModal('Aucun fichier reçu','Le sélecteur Android est revenu sans transmettre de fichier. Réessaie avec « Sélecteur de fichiers », puis touche le fichier lui-même.',{danger:true,icon:'up'});return}}
+else if((a==='imp'||a==='impf')&&t.files[0]){const f=t.files[0];try{t.value=''}catch(x){}openFileImport(f);return}
 save();render()});
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)&&e.target.dataset&&e.target.dataset.enter){e.preventDefault();A.cs({dataset:{id:e.target.dataset.enter}})}});
 addEventListener('beforeinstallprompt',e=>{e.preventDefault();window.dip=e;render()});addEventListener('appinstalled',()=>{window.dip=null;render()});

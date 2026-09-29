@@ -1,9 +1,25 @@
-MISE À JOUR 28/09/2026 — CORRECTIONS v6
+CORRECTIF 29/09/2026 (2) — IMPORT SUR TÉLÉPHONE
+Sur Android, choisir un fichier dans Profil → Données → « Importer un fichier » ne faisait rien :
+au retour du sélecteur, l'app se redessinait et le champ fichier était détruit avant que le choix
+soit pris en compte (sur ordinateur, la page reste visible, donc ça marchait). Corrigé : l'app
+ne se redessine plus au retour du sélecteur de fichiers. Version affichée en bas de Profil :
+« Aube · version 29/09/2026 · import v7 ».
 
-- Import des tableaux Jour | Horaire | Activité | Durée : la durée est utilisée pour calculer l’heure de fin, y compris après minuit. Les jours vides reprennent le dernier jour indiqué.
-- Saisie de la barre d’humeur : limite portée à 10 000 caractères et le champ se vide après l’enregistrement.
-- Import Profil → Données : taille maximale 10 Mo; le sélecteur accepte tous les types de fichiers, puis Aube vérifie le contenu reconnu (sauvegarde JSON/ZIP, texte/calendrier, image ou son).
-- L’import d’une sauvegarde demande Remplacer ou Fusionner et vérifie l’enregistrement sur l’appareil.
+----------------------------------------------------------------------
+
+CORRECTIF 29/09/2026 — sur la base du dossier reçu le 28/09 (workspace)
+
+1) Onglet Habitudes : il ne s'ouvrait plus du tout (page bloquée) à cause d'une
+   fonction manquante (calcul de la durée d'une habitude selon le jour, liée aux
+   horaires variables). Réparé : les habitudes s'affichent à nouveau normalement.
+2) Profil → Données → « Importer un fichier » : le bouton ne faisait plus rien,
+   le sélecteur de fichier avait disparu du bouton. Réparé : le bouton rouvre bien
+   le choix de fichier.
+Remarque : ceci corrige un blocage net de l'onglet Habitudes ; si le clignotement
+vu dans ta vidéo persiste après cette version, dis-le, ce n'est peut-être pas
+la même cause et il faudra la retrouver précisément.
+
+----------------------------------------------------------------------
 
 MISE À JOUR 28/09/2026 — IMPORT DE FICHIERS, RESTAURATION, MARA « EMPLOI DU TEMPS »
 
@@ -102,9 +118,3 @@ CE QUI A CHANGÉ
 LIMITE HONNÊTE : Mara est un moteur à règles très large, pas un grand modèle de langage.
 Une tournure vraiment inhabituelle peut encore la surprendre ; elle le dit alors et propose
 de reformuler plutôt que d'inventer.
-
-
-CORRECTION IMPORT ANDROID — version corrective
-- Le champ d’import accepte explicitement tous les types de fichiers.
-- Le traitement de sélection est centralisé et dispose d’un rattrapage au retour du sélecteur Android si l’événement change n’est pas remonté immédiatement.
-- Les fichiers restent limités à 10 Mo et sont analysés selon leur contenu reconnu.

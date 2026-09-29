@@ -1,5 +1,5 @@
 /* Aube — service worker d'alarmes (portée racine) */
-const C = "aube-root-v6";
+const C = "aube-root-v4";
 
 self.addEventListener("install", (e) => {
   e.waitUntil(self.skipWaiting());
